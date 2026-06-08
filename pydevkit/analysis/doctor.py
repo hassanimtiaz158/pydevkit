@@ -1,12 +1,12 @@
 """Project health checks for PyDevKit."""
 
 import importlib.util
+import sys
 from pathlib import Path
 from typing import Dict, List
 
 from pydevkit.analysis.inspector import inspect_project
 from pydevkit.utils.config import load_config
-from pydevkit.utils.file_utils import read_file_safe
 
 
 Issue = Dict[str, object]
@@ -39,6 +39,7 @@ def _dependency_import_name(requirement: str) -> str:
     """Infer an import package name from a requirement line."""
     try:
         package = requirement.split(";", 1)[0].strip()
+        package = package.split("[", 1)[0].strip()
         for separator in ("==", ">=", "<=", "~=", "!=", ">", "<"):
             package = package.split(separator, 1)[0].strip()
         normalized = package.lower().replace("_", "-")
@@ -47,12 +48,22 @@ def _dependency_import_name(requirement: str) -> str:
         return ""
 
 
-def _missing_runtime_imports(imports: List[str]) -> List[str]:
+def _is_stdlib_module(name: str) -> bool:
+    """Return True when a module is part of the Python standard library."""
+    try:
+        stdlib_names = getattr(sys, "stdlib_module_names", set())
+        return name in stdlib_names or name in sys.builtin_module_names
+    except AttributeError:
+        return False
+
+
+def _missing_runtime_imports(imports: List[str], project_modules: List[str]) -> List[str]:
     """Return imported modules that cannot be resolved in the current environment."""
     try:
         missing = []
+        local_modules = set(project_modules)
         for name in imports:
-            if name.startswith("."):
+            if name.startswith(".") or name in local_modules or _is_stdlib_module(name):
                 continue
             try:
                 if importlib.util.find_spec(name) is None:
@@ -110,6 +121,7 @@ def run_doctor(project_path: str) -> Dict[str, object]:
         project = report.get("project", {})
         dependencies = project.get("dependencies", []) if isinstance(project, dict) else []
         imports = report.get("imports", [])
+        project_modules = report.get("project_modules", [])
         issues: List[Issue] = []
 
         if not (root / "README.md").exists():
@@ -125,7 +137,10 @@ def run_doctor(project_path: str) -> Dict[str, object]:
             if isinstance(syntax_error, dict):
                 issues.append(_issue("syntax-error", "high", f"{syntax_error.get('file')}:{syntax_error.get('line')} {syntax_error.get('message')}", "Fix the syntax error before running generators."))
 
-        for missing_import in _missing_runtime_imports(imports if isinstance(imports, list) else []):
+        for missing_import in _missing_runtime_imports(
+            imports if isinstance(imports, list) else [],
+            project_modules if isinstance(project_modules, list) else [],
+        ):
             issues.append(_issue("missing-import", "high", f"Import '{missing_import}' cannot be resolved in this environment.", "Install the dependency or fix the import name."))
 
         for dependency in _unused_dependencies(dependencies if isinstance(dependencies, list) else [], imports if isinstance(imports, list) else []):

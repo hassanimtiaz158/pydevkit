@@ -30,6 +30,22 @@ def test_load_config_reads_pydevkit_toml(tmp_path: Path) -> None:
         raise AssertionError(f"load_config failed unexpectedly: {exc}") from exc
 
 
+def test_load_config_normalizes_empty_output(tmp_path: Path) -> None:
+    """Assert empty configured output is normalized to None."""
+    try:
+        (tmp_path / ".pydevkit.toml").write_text(
+            "[testgen]\n"
+            'output = ""\n',
+            encoding="utf-8",
+        )
+
+        config = load_config(str(tmp_path))
+
+        assert config["testgen"]["output"] is None
+    except RuntimeError as exc:
+        raise AssertionError(f"load_config failed unexpectedly: {exc}") from exc
+
+
 def test_deadcode_respects_config_ignore_names(tmp_path: Path) -> None:
     """Assert configured names are ignored by the deadcode scanner."""
     try:
@@ -64,8 +80,31 @@ def test_inspect_project_returns_summary() -> None:
         assert report["summary"]["functions"] >= 1
         assert "deadcode" in report
         assert "function_metrics" in report
+        assert "project_modules" in report
+        assert "import_edges" in report
     except RuntimeError as exc:
         raise AssertionError(f"inspect_project failed unexpectedly: {exc}") from exc
+
+
+def test_doctor_does_not_flag_local_imports_as_missing(tmp_path: Path) -> None:
+    """Assert doctor treats project modules as local imports."""
+    try:
+        (tmp_path / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+        (tmp_path / "app.py").write_text("import helper\n\nresult = helper.VALUE\n", encoding="utf-8")
+        (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+        (tmp_path / "LICENSE").write_text("MIT\n", encoding="utf-8")
+        (tmp_path / ".env.example").write_text("KEY=value\n", encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+
+        report = run_doctor(str(tmp_path))
+        missing_imports = [
+            item for item in report["issues"]
+            if item["code"] == "missing-import"
+        ]
+
+        assert missing_imports == []
+    except RuntimeError as exc:
+        raise AssertionError(f"run_doctor failed unexpectedly: {exc}") from exc
 
 
 def test_run_doctor_reports_health_issues(tmp_path: Path) -> None:

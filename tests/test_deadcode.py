@@ -125,3 +125,22 @@ def test_scan_deadcode_respects_min_confidence(tmp_path: Path) -> None:
         assert "maybe_public_api" not in names
     except RuntimeError as exc:
         raise AssertionError(f"scan_deadcode failed unexpectedly: {exc}") from exc
+
+
+def test_scan_deadcode_respects_config_ignore_files(tmp_path: Path) -> None:
+    """Assert configured ignored file globs are not scanned."""
+    try:
+        (tmp_path / ".pydevkit.toml").write_text(
+            "[deadcode]\n"
+            'ignore_files = ["generated/*"]\n',
+            encoding="utf-8",
+        )
+        generated = tmp_path / "generated"
+        generated.mkdir()
+        (generated / "module.py").write_text("def unused_generated() -> int:\n    return 1\n", encoding="utf-8")
+
+        results = scan_deadcode(str(tmp_path))
+
+        assert results == []
+    except RuntimeError as exc:
+        raise AssertionError(f"scan_deadcode failed unexpectedly: {exc}") from exc

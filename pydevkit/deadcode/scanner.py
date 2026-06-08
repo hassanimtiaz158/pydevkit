@@ -130,7 +130,15 @@ def _is_ignored_file(file_path: Path, root: Path, patterns: List[str]) -> bool:
     """Return True when a file matches configured ignore patterns."""
     try:
         relative = _relative_path(file_path, root)
-        return any(fnmatch(relative, pattern.replace("\\", "/")) for pattern in patterns)
+        for pattern in patterns:
+            normalized = pattern.replace("\\", "/").strip()
+            if not normalized:
+                continue
+            if fnmatch(relative, normalized) or fnmatch(relative, f"**/{normalized}"):
+                return True
+            if normalized.endswith("/*") and relative.startswith(normalized[:-1]):
+                return True
+        return False
     except TypeError:
         return False
 
@@ -151,6 +159,20 @@ def _result_confidence(symbol_type: str) -> str:
         if symbol_type == "variable":
             return "high"
         if symbol_type in {"class", "function", "method"}:
+            return "medium"
+        return "low"
+    except RuntimeError:
+        return "low"
+
+
+def _result_severity(symbol_type: str, confidence: str) -> str:
+    """Return a severity label for a result."""
+    try:
+        if symbol_type == "import":
+            return "high"
+        if symbol_type == "variable":
+            return "medium"
+        if confidence == "medium":
             return "medium"
         return "low"
     except RuntimeError:
@@ -229,7 +251,7 @@ def scan_deadcode(
                         "type": definition.symbol_type,
                         "name": definition.name,
                         "suggestion": suggestion,
-                        "severity": "high" if definition.symbol_type == "import" else "medium",
+                        "severity": _result_severity(definition.symbol_type, confidence),
                         "confidence": confidence,
                     }
                 )

@@ -81,7 +81,11 @@ def _sample_value(argument: str) -> str:
             return "True"
         if "str" in annotation:
             return '"example"'
-        if "list" in annotation or "sequence" in annotation:
+        if "path" in annotation:
+            return 'Path(".")'
+        if "tuple" in annotation:
+            return "()"
+        if "list" in annotation or "sequence" in annotation or "iterable" in annotation:
             return "[]"
         if "dict" in annotation or "mapping" in annotation:
             return "{}"
@@ -108,7 +112,9 @@ def _offline_tests_for_file(project_root: Path, source_file: str, functions: Lis
             "import sys",
             "from pathlib import Path",
             "",
-            f"sys.path.insert(0, str(Path({str(project_root.resolve())!r})))",
+            f"PROJECT_ROOT = str(Path({str(project_root.resolve())!r}))",
+            "if PROJECT_ROOT not in sys.path:",
+            "    sys.path.insert(0, PROJECT_ROOT)",
             "",
             f"from {module_path} import {imports}",
             "",

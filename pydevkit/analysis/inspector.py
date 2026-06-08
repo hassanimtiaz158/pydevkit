@@ -37,6 +37,31 @@ def _imports_from_tree(tree: ast.AST) -> Set[str]:
         return set()
 
 
+def _module_name(file_path: Path, root: Path) -> str:
+    """Return an import-style module name for a Python file."""
+    try:
+        relative = file_path.relative_to(root).with_suffix("")
+        parts = [part for part in relative.parts if part != "__init__"]
+        return ".".join(parts)
+    except ValueError:
+        return file_path.stem
+
+
+def _project_modules(project_path: str) -> Set[str]:
+    """Return importable module names that belong to the project."""
+    try:
+        root = Path(project_path)
+        modules: Set[str] = set()
+        for file_path in get_python_files(project_path):
+            module = _module_name(file_path, root)
+            if module:
+                modules.add(module)
+                modules.add(module.split(".", 1)[0])
+        return modules
+    except OSError:
+        return set()
+
+
 def _function_metrics(node: ast.FunctionDef | ast.AsyncFunctionDef, file_path: Path, root: Path) -> Dict[str, object]:
     """Build complexity metrics for a function node."""
     try:
@@ -61,10 +86,12 @@ def _source_metrics(project_path: str) -> Dict[str, object]:
         root = Path(project_path)
         syntax_errors: List[Dict[str, object]] = []
         imports: Set[str] = set()
+        import_edges: List[Dict[str, str]] = []
         function_metrics: List[Dict[str, object]] = []
         total_lines = 0
 
         for file_path in get_python_files(project_path):
+            module_name = _module_name(file_path, root)
             source = read_file_safe(file_path)
             total_lines += len(source.splitlines())
             if not source.strip():
@@ -80,7 +107,10 @@ def _source_metrics(project_path: str) -> Dict[str, object]:
                     }
                 )
                 continue
-            imports.update(_imports_from_tree(tree))
+            file_imports = _imports_from_tree(tree)
+            imports.update(file_imports)
+            for imported in sorted(file_imports):
+                import_edges.append({"from": module_name, "to": imported})
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     function_metrics.append(_function_metrics(node, file_path, root))
@@ -88,6 +118,8 @@ def _source_metrics(project_path: str) -> Dict[str, object]:
         return {
             "total_lines": total_lines,
             "imports": sorted(imports),
+            "import_edges": import_edges,
+            "project_modules": sorted(_project_modules(project_path)),
             "syntax_errors": syntax_errors,
             "function_metrics": function_metrics,
         }
@@ -116,6 +148,8 @@ def inspect_project(project_path: str) -> Dict[str, object]:
                 "has_tests": bool(metadata.get("has_tests")),
             },
             "imports": source_metrics["imports"],
+            "import_edges": source_metrics["import_edges"],
+            "project_modules": source_metrics["project_modules"],
             "deadcode": deadcode,
             "syntax_errors": source_metrics["syntax_errors"],
             "function_metrics": function_metrics,

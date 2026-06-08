@@ -59,6 +59,7 @@ def test_generated_offline_tests_include_project_path(tmp_path: Path) -> None:
         generate_tests(str(project), output=str(output), use_ai=False)
         content = (output / "test_worker.py").read_text(encoding="utf-8")
 
+        assert "PROJECT_ROOT" in content
         assert "sys.path.insert" in content
         assert repr(str(project.resolve()))[1:-1] in content
     except RuntimeError as exc:
