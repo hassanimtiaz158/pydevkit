@@ -1,0 +1,2 @@
+[console_scripts]
+pydevkit = pydevkit.cli:cli
