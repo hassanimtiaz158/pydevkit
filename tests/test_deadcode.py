@@ -5,10 +5,14 @@ from pathlib import Path
 from pydevkit.deadcode.scanner import remove_unused_imports, scan_deadcode
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SAMPLE_PROJECT = PROJECT_ROOT / "sample_project"
+
+
 def test_scan_deadcode_detects_unused_sample_symbols() -> None:
     """Assert unused sample functions and imports are reported."""
     try:
-        results = scan_deadcode("sample_project")
+        results = scan_deadcode(str(SAMPLE_PROJECT))
         names = {str(item["name"]) for item in results}
 
         assert "unused_discount" in names
@@ -20,7 +24,7 @@ def test_scan_deadcode_detects_unused_sample_symbols() -> None:
 def test_scan_deadcode_does_not_report_used_functions() -> None:
     """Assert functions called elsewhere are not reported as unused."""
     try:
-        results = scan_deadcode("sample_project")
+        results = scan_deadcode(str(SAMPLE_PROJECT))
         names = {str(item["name"]) for item in results}
 
         assert "add_numbers" not in names

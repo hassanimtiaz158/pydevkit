@@ -20,10 +20,6 @@ from pydevkit.utils.config import load_config
 @click.group()
 def cli() -> None:
     """PyDevKit developer productivity commands."""
-    try:
-        return None
-    except RuntimeError as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
 
 
 @cli.command()
@@ -49,7 +45,7 @@ def deadcode(path: str, fix: bool, dry_run: bool, json_output: bool, ci: bool, i
         if ci and results:
             raise click.exceptions.Exit(1)
     except (OSError, RuntimeError) as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise click.ClickException(str(exc)) from exc
 
 
 @cli.command()
@@ -61,7 +57,7 @@ def readme(path: str, no_ai: bool) -> None:
         console.print(Panel(f"Generating README for {Path(path)}", title="PyDevKit README", style="bold blue"))
         generate_readme(path, use_ai=not no_ai)
     except (OSError, RuntimeError) as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise click.ClickException(str(exc)) from exc
 
 
 @cli.command()
@@ -77,7 +73,7 @@ def testgen(path: str, output: str | None, offline: bool) -> None:
         configured_offline = offline or bool(config.get("offline", False))
         generate_tests(path, output=str(configured_output) if configured_output else None, use_ai=not configured_offline)
     except (OSError, RuntimeError) as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise click.ClickException(str(exc)) from exc
 
 
 @cli.command()
@@ -109,7 +105,7 @@ def inspect(path: str, json_output: bool) -> None:
                 error_table.add_row(str(item["file"]), str(item["line"]), str(item["message"]))
             console.print(error_table)
     except (OSError, RuntimeError) as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise click.ClickException(str(exc)) from exc
 
 
 @cli.command()
@@ -148,11 +144,8 @@ def doctor(path: str, json_output: bool, ci: bool) -> None:
         if ci and int(report["summary"]["high"]) + int(report["summary"]["medium"]) > 0:
             raise click.exceptions.Exit(1)
     except (OSError, RuntimeError) as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise click.ClickException(str(exc)) from exc
 
 
 if __name__ == "__main__":
-    try:
-        cli()
-    except RuntimeError as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+    cli()

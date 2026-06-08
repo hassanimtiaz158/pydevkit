@@ -32,6 +32,8 @@ def _module_import_path(source_file: str) -> str:
         path = Path(source_file)
         without_suffix = path.with_suffix("")
         parts = [part for part in without_suffix.parts if part != "__init__"]
+        if not parts:
+            raise ValueError("empty module path")
         return ".".join(parts)
     except (ValueError, TypeError) as exc:
         raise RuntimeError(f"Unable to determine import path for {source_file}: {exc}") from exc
@@ -68,44 +70,22 @@ def _validate_python(code: str) -> bool:
         return False
 
 
-def _sample_value(argument: str) -> str:
-    """Return a conservative sample value for an annotated argument."""
-    try:
-        lowered = argument.lower()
-        annotation = lowered.split(":", 1)[1].strip() if ":" in lowered else ""
-        if "float" in annotation:
-            return "1.5"
-        if "int" in annotation:
-            return "1"
-        if "bool" in annotation:
-            return "True"
-        if "str" in annotation:
-            return '"example"'
-        if "path" in annotation:
-            return 'Path(".")'
-        if "tuple" in annotation:
-            return "()"
-        if "list" in annotation or "sequence" in annotation or "iterable" in annotation:
-            return "[]"
-        if "dict" in annotation or "mapping" in annotation:
-            return "{}"
-        if "set" in annotation:
-            return "set()"
-        if "name" in lowered or "text" in lowered or "value" in lowered:
-            return '"example"'
-        if "price" in lowered or "amount" in lowered:
-            return "1.5"
-        return "1"
-    except AttributeError:
-        return "None"
+def _safe_import_alias(name: str) -> str:
+    """Return an alias that pytest will not treat as a collected object."""
+    if name.startswith("test"):
+        return f"subject_{name}"
+    return name
 
 
 def _offline_tests_for_file(project_root: Path, source_file: str, functions: List[Dict[str, object]]) -> str:
-    """Generate runnable pytest smoke tests without an AI provider."""
+    """Generate runnable import smoke tests without an AI provider."""
     try:
         module_path = _module_import_path(source_file)
         names = [str(function["name"]) for function in functions]
-        imports = ", ".join(sorted(names))
+        imports = ", ".join(
+            f"{name} as {_safe_import_alias(name)}" if _safe_import_alias(name) != name else name
+            for name in sorted(names)
+        )
         lines = [
             '"""Auto-generated smoke tests by PyDevKit."""',
             "",
@@ -122,24 +102,12 @@ def _offline_tests_for_file(project_root: Path, source_file: str, functions: Lis
         ]
         for function in functions:
             name = str(function["name"])
-            args = [_sample_value(str(argument)) for argument in function.get("args", [])]
-            call = f"{name}({', '.join(args)})"
+            alias = _safe_import_alias(name)
             lines.extend(
                 [
                     f"def test_{name}_is_callable() -> None:",
                     f'    """Assert {name} can be imported."""',
-                    "    try:",
-                    f"        assert callable({name})",
-                    "    except AssertionError:",
-                    "        raise",
-                    "",
-                    "",
-                    f"def test_{name}_accepts_sample_inputs() -> None:",
-                    f'    """Assert {name} accepts representative sample inputs."""',
-                    "    try:",
-                    f"        {call}",
-                    "    except TypeError as exc:",
-                    f'        raise AssertionError("{name} rejected generated sample inputs") from exc',
+                    f"    assert callable({alias})",
                     "",
                     "",
                 ]

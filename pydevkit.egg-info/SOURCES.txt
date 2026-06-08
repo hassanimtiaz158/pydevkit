@@ -8,6 +8,9 @@ pydevkit.egg-info/dependency_links.txt
 pydevkit.egg-info/entry_points.txt
 pydevkit.egg-info/requires.txt
 pydevkit.egg-info/top_level.txt
+pydevkit/analysis/__init__.py
+pydevkit/analysis/doctor.py
+pydevkit/analysis/inspector.py
 pydevkit/deadcode/__init__.py
 pydevkit/deadcode/reporter.py
 pydevkit/deadcode/scanner.py
@@ -19,7 +22,9 @@ pydevkit/testgen/extractor.py
 pydevkit/testgen/generator.py
 pydevkit/utils/__init__.py
 pydevkit/utils/api_client.py
+pydevkit/utils/config.py
 pydevkit/utils/file_utils.py
+tests/test_analysis.py
 tests/test_deadcode.py
 tests/test_readme.py
 tests/test_testgen.py

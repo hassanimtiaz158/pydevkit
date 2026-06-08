@@ -8,6 +8,10 @@ from pydevkit.deadcode.scanner import scan_deadcode
 from pydevkit.utils.config import load_config
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SAMPLE_PROJECT = PROJECT_ROOT / "sample_project"
+
+
 def test_load_config_reads_pydevkit_toml(tmp_path: Path) -> None:
     """Assert .pydevkit.toml values are loaded into config."""
     try:
@@ -74,7 +78,7 @@ def test_deadcode_respects_config_ignore_names(tmp_path: Path) -> None:
 def test_inspect_project_returns_summary() -> None:
     """Assert inspect_project returns useful summary metrics."""
     try:
-        report = inspect_project("sample_project")
+        report = inspect_project(str(SAMPLE_PROJECT))
 
         assert report["summary"]["python_files"] >= 1
         assert report["summary"]["functions"] >= 1

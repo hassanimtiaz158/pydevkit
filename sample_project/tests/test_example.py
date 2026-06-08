@@ -1,77 +1,40 @@
-# example.py
+"""Auto-generated smoke tests by PyDevKit."""
 
-def add_numbers(left: int, right: int) -> int:
-    """
-    Add two integers and return the total.
-    
-    Args:
-        left (int): The first number.
-        right (int): The second number.
-    
-    Returns:
-        int: The total sum of left and right.
-    """
-    return left + right
+import sys
+from pathlib import Path
 
-def multiply_numbers(left: int, right: int) -> int:
-    """
-    Multiply two integers and return the product.
-    
-    Args:
-        left (int): The first number.
-        right (int): The second number.
-    
-    Returns:
-        int: The product of left and right.
-    """
-    return left * right
+PROJECT_ROOT = str(Path('D:\\pydevkit\\sample_project'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-def normalize_text(value: str) -> str:
-    """
-    Normalize whitespace and lowercase a string.
-    
-    Args:
-        value (str): The string to be normalized.
-    
-    Returns:
-        str: The normalized string.
-    """
-    return value.strip().lower()
+from example import add_numbers, distance_from_origin, multiply_numbers, normalize_text, unused_discount, unused_slugify
 
-def unused_discount(price: float, percent: float) -> float:
-    """
-    Calculate a discounted price.
-    
-    Args:
-        price (float): The original price.
-        percent (float): The discount percentage.
-    
-    Returns:
-        float: The discounted price.
-    """
-    return price - (price * percent / 100)
 
-def unused_slugify(value: str) -> str:
-    """
-    Convert a phrase into a simple URL slug.
-    
-    Args:
-        value (str): The string to be slugified.
-    
-    Returns:
-        str: The slugified string.
-    """
-    return ''.join(e for e in value if e.isalnum()).lower()
+def test_add_numbers_is_callable() -> None:
+    """Assert add_numbers can be imported."""
+    assert callable(add_numbers)
 
-def distance_from_origin(x_value: float, y_value: float) -> float:
-    """
-    Calculate distance from the origin for a point.
-    
-    Args:
-        x_value (float): The X-coordinate of the point.
-        y_value (float): The Y-coordinate of the point.
-    
-    Returns:
-        float: The distance from the origin.
-    """
-    return (x_value ** 2 + y_value ** 2) ** 0.5
+
+def test_multiply_numbers_is_callable() -> None:
+    """Assert multiply_numbers can be imported."""
+    assert callable(multiply_numbers)
+
+
+def test_normalize_text_is_callable() -> None:
+    """Assert normalize_text can be imported."""
+    assert callable(normalize_text)
+
+
+def test_unused_discount_is_callable() -> None:
+    """Assert unused_discount can be imported."""
+    assert callable(unused_discount)
+
+
+def test_unused_slugify_is_callable() -> None:
+    """Assert unused_slugify can be imported."""
+    assert callable(unused_slugify)
+
+
+def test_distance_from_origin_is_callable() -> None:
+    """Assert distance_from_origin can be imported."""
+    assert callable(distance_from_origin)

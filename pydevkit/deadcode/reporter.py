@@ -13,7 +13,7 @@ def print_deadcode_report(results: List[Dict[str, object]]) -> None:
     """Print dead code results as a Rich table."""
     try:
         if not results:
-            console.print(Panel("No dead code found! ✅", style="green", title="Success"))
+            console.print(Panel("No dead code found.", style="green", title="Success"))
             return
 
         table = Table(title="Dead Code Report")

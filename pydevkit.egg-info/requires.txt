@@ -1,3 +1,4 @@
 click
 groq
 rich
+python-dotenv

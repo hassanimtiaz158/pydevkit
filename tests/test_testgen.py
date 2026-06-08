@@ -6,10 +6,14 @@ from pydevkit.testgen.extractor import extract_functions
 from pydevkit.testgen.generator import generate_tests
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SAMPLE_PROJECT = PROJECT_ROOT / "sample_project"
+
+
 def test_extract_functions_finds_public_sample_functions() -> None:
     """Assert public sample functions are extracted."""
     try:
-        functions = extract_functions("sample_project")
+        functions = extract_functions(str(SAMPLE_PROJECT))
         names = {str(item["name"]) for item in functions}
 
         assert "add_numbers" in names
@@ -38,7 +42,7 @@ def test_generate_tests_offline_creates_syntax_valid_file(tmp_path: Path) -> Non
         content = test_file.read_text(encoding="utf-8")
         assert test_file.exists()
         assert "def test_add_is_callable" in content
-        assert "def test_add_accepts_sample_inputs" in content
+        assert "add(" not in content
     except RuntimeError as exc:
         raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
 
@@ -66,10 +70,30 @@ def test_generated_offline_tests_include_project_path(tmp_path: Path) -> None:
         raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
 
 
+def test_generated_offline_tests_alias_test_prefixed_imports(tmp_path: Path) -> None:
+    """Assert generated imports do not create pytest collection collisions."""
+    try:
+        project = tmp_path / "demo"
+        project.mkdir()
+        (project / "commands.py").write_text(
+            "def testgen() -> None:\n"
+            "    pass\n",
+            encoding="utf-8",
+        )
+
+        generate_tests(str(project), use_ai=False)
+        content = (project / "tests" / "test_commands.py").read_text(encoding="utf-8")
+
+        assert "from commands import testgen as subject_testgen" in content
+        assert "assert callable(subject_testgen)" in content
+    except RuntimeError as exc:
+        raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
+
+
 def test_extract_functions_captures_args_and_docstrings() -> None:
     """Assert function args, type hints, and docstrings are captured."""
     try:
-        functions = extract_functions("sample_project")
+        functions = extract_functions(str(SAMPLE_PROJECT))
         by_name = {str(item["name"]): item for item in functions}
         add_numbers = by_name["add_numbers"]
 
