@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 from rich.panel import Panel
 
@@ -39,7 +39,7 @@ def _basic_template(context: Dict[str, object]) -> str:
 
         return f"""# {project_name}
 
-![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Version](https://img.shields.io/badge/version-{version}-blue)
 ![License](https://img.shields.io/badge/license-{license_name}-green)
 
@@ -97,23 +97,70 @@ MIT
         raise RuntimeError(f"Unable to render README template: {exc}") from exc
 
 
+def _limit_items(items: object, limit: int) -> List[object]:
+    """Return a bounded list for compact AI prompts."""
+    if not isinstance(items, list):
+        return []
+    return items[:limit]
+
+
+def _compact_ai_context(context: Dict[str, object]) -> Dict[str, object]:
+    """Build a small project summary that stays under low TPM limits."""
+    return {
+        "project_name": context.get("project_name"),
+        "package_name": context.get("package_name"),
+        "version": context.get("version"),
+        "license": context.get("license"),
+        "entry_point": context.get("entry_point"),
+        "has_tests": context.get("has_tests"),
+        "console_scripts": _limit_items(context.get("console_scripts"), 8),
+        "dependencies": _limit_items(context.get("dependencies"), 12),
+        "python_files": _limit_items(context.get("python_files"), 30),
+        "functions": [
+            {
+                "name": item.get("name"),
+                "file": item.get("file"),
+                "docstring": str(item.get("docstring", ""))[:160],
+            }
+            for item in _limit_items(context.get("functions"), 25)
+            if isinstance(item, dict)
+        ],
+        "classes": [
+            {
+                "name": item.get("name"),
+                "file": item.get("file"),
+                "docstring": str(item.get("docstring", ""))[:160],
+            }
+            for item in _limit_items(context.get("classes"), 15)
+            if isinstance(item, dict)
+        ],
+    }
+
+
 def generate_readme(project_path: str, use_ai: bool = True) -> None:
     """Generate README.md for a project."""
     try:
         context = analyze_project(project_path)
         if use_ai:
-            context_json = json.dumps(context, indent=2)
+            context_json = json.dumps(_compact_ai_context(context), separators=(",", ":"))
             prompt = (
                 "Generate a professional GitHub README.md for this Python project.\n"
-                "Include: title, badges (Python version, license), description,\n"
-                "features list, installation (pip install -e .), usage examples\n"
-                "with code blocks, project structure, contributing guide, license.\n"
+                "Keep it concise but complete. Include: title, badges, description,\n"
+                "features, installation, CLI usage examples, project structure,\n"
+                "configuration, testing, contributing, and license.\n"
                 f"Project info: {context_json}"
             )
-            content = call_groq(
-                prompt=prompt,
-                system="You are an expert technical writer. Return only README markdown.",
-            )
+            try:
+                content = call_groq(
+                    prompt=prompt,
+                    system="You are an expert technical writer. Return only README markdown.",
+                    max_tokens=1200,
+                )
+            except RuntimeError as exc:
+                if "Request too large" not in str(exc) and "tokens per minute" not in str(exc):
+                    raise
+                console.print("[yellow]Groq token limit reached; generating README offline instead.[/yellow]")
+                content = _basic_template(context)
         else:
             content = _basic_template(context)
 
