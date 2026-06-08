@@ -1,14 +1,12 @@
 """A small calculator and string utility module for PyDevKit demos."""
 
-
-
 import math
 import statistics
 
 
 _DEMO_TOTAL = 0
 UNUSED_CONSTANT = 42
-import pydantic
+
 
 def add_numbers(left: int, right: int) -> int:
     """Add two integers and return the total."""

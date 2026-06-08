@@ -1,6 +1,9 @@
 """Tests for test generation extraction."""
 
+from pathlib import Path
+
 from pydevkit.testgen.extractor import extract_functions
+from pydevkit.testgen.generator import generate_tests
 
 
 def test_extract_functions_finds_public_sample_functions() -> None:
@@ -15,6 +18,29 @@ def test_extract_functions_finds_public_sample_functions() -> None:
         assert "unused_discount" in names
     except RuntimeError as exc:
         raise AssertionError(f"extract_functions failed unexpectedly: {exc}") from exc
+
+
+def test_generate_tests_offline_creates_syntax_valid_file(tmp_path: Path) -> None:
+    """Assert offline test generation works without a Groq API key."""
+    try:
+        project = tmp_path / "demo"
+        project.mkdir()
+        (project / "calculator.py").write_text(
+            "def add(left: int, right: int) -> int:\n"
+            "    \"\"\"Add two integers.\"\"\"\n"
+            "    return left + right\n",
+            encoding="utf-8",
+        )
+
+        generate_tests(str(project), use_ai=False)
+
+        test_file = project / "tests" / "test_calculator.py"
+        content = test_file.read_text(encoding="utf-8")
+        assert test_file.exists()
+        assert "def test_add_is_callable" in content
+        assert "def test_add_accepts_sample_inputs" in content
+    except RuntimeError as exc:
+        raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
 
 
 def test_extract_functions_captures_args_and_docstrings() -> None:

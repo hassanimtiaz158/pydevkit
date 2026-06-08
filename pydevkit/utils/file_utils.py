@@ -1,22 +1,85 @@
 """File helpers for PyDevKit."""
 
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import List
+from typing import Iterable, List
+
+
+DEFAULT_SKIP_DIRS = {
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "htmlcov",
+    "node_modules",
+    "site-packages",
+    "venv",
+}
+
+
+def _load_ignore_patterns(root: Path) -> List[str]:
+    """Load simple ignore patterns from .pydevkitignore and .gitignore."""
+    try:
+        patterns: List[str] = []
+        for ignore_file in (root / ".pydevkitignore", root / ".gitignore"):
+            if not ignore_file.exists():
+                continue
+            for line in read_file_safe(ignore_file).splitlines():
+                cleaned = line.strip()
+                if cleaned and not cleaned.startswith("#"):
+                    patterns.append(cleaned)
+        return patterns
+    except OSError:
+        return []
+
+
+def _matches_ignore(path: Path, root: Path, patterns: Iterable[str]) -> bool:
+    """Return True when a path matches a simple ignore pattern."""
+    try:
+        relative = path.relative_to(root).as_posix()
+        for pattern in patterns:
+            normalized = pattern.rstrip("/").replace("\\", "/")
+            if fnmatch(relative, normalized) or fnmatch(relative, f"{normalized}/**"):
+                return True
+            if "/" not in normalized and normalized in path.parts:
+                return True
+        return False
+    except ValueError:
+        return False
 
 
 def get_python_files(path: str) -> List[Path]:
-    """Return Python files below a path, excluding cache folders."""
+    """Return Python files below a path, excluding ignored/generated folders."""
     try:
         root = Path(path)
         if not root.exists():
             return []
         if root.is_file():
-            return [root] if root.suffix == ".py" and "__pycache__" not in root.parts else []
-        return sorted(
-            file_path
-            for file_path in root.rglob("*.py")
-            if "__pycache__" not in file_path.parts
-        )
+            return [root] if root.suffix == ".py" and not any(part in DEFAULT_SKIP_DIRS for part in root.parts) else []
+
+        ignore_patterns = _load_ignore_patterns(root)
+        python_files: List[Path] = []
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            try:
+                for child in current.iterdir():
+                    if child.is_dir():
+                        if child.name in DEFAULT_SKIP_DIRS or _matches_ignore(child, root, ignore_patterns):
+                            continue
+                        stack.append(child)
+                    elif child.suffix == ".py" and not _matches_ignore(child, root, ignore_patterns):
+                        python_files.append(child)
+            except OSError:
+                continue
+        return sorted(python_files)
     except (OSError, RuntimeError):
         return []
 

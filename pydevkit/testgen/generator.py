@@ -68,6 +68,81 @@ def _validate_python(code: str) -> bool:
         return False
 
 
+def _sample_value(argument: str) -> str:
+    """Return a conservative sample value for an annotated argument."""
+    try:
+        lowered = argument.lower()
+        annotation = lowered.split(":", 1)[1].strip() if ":" in lowered else ""
+        if "float" in annotation:
+            return "1.5"
+        if "int" in annotation:
+            return "1"
+        if "bool" in annotation:
+            return "True"
+        if "str" in annotation:
+            return '"example"'
+        if "list" in annotation or "sequence" in annotation:
+            return "[]"
+        if "dict" in annotation or "mapping" in annotation:
+            return "{}"
+        if "set" in annotation:
+            return "set()"
+        if "name" in lowered or "text" in lowered or "value" in lowered:
+            return '"example"'
+        if "price" in lowered or "amount" in lowered:
+            return "1.5"
+        return "1"
+    except AttributeError:
+        return "None"
+
+
+def _offline_tests_for_file(project_root: Path, source_file: str, functions: List[Dict[str, object]]) -> str:
+    """Generate runnable pytest smoke tests without an AI provider."""
+    try:
+        module_path = _module_import_path(source_file)
+        names = [str(function["name"]) for function in functions]
+        imports = ", ".join(sorted(names))
+        lines = [
+            '"""Auto-generated smoke tests by PyDevKit."""',
+            "",
+            "import sys",
+            "from pathlib import Path",
+            "",
+            f"sys.path.insert(0, str(Path({str(project_root.resolve())!r})))",
+            "",
+            f"from {module_path} import {imports}",
+            "",
+            "",
+        ]
+        for function in functions:
+            name = str(function["name"])
+            args = [_sample_value(str(argument)) for argument in function.get("args", [])]
+            call = f"{name}({', '.join(args)})"
+            lines.extend(
+                [
+                    f"def test_{name}_is_callable() -> None:",
+                    f'    """Assert {name} can be imported."""',
+                    "    try:",
+                    f"        assert callable({name})",
+                    "    except AssertionError:",
+                    "        raise",
+                    "",
+                    "",
+                    f"def test_{name}_accepts_sample_inputs() -> None:",
+                    f'    """Assert {name} accepts representative sample inputs."""',
+                    "    try:",
+                    f"        {call}",
+                    "    except TypeError as exc:",
+                    f'        raise AssertionError("{name} rejected generated sample inputs") from exc',
+                    "",
+                    "",
+                ]
+            )
+        return "\n".join(lines).rstrip() + "\n"
+    except (KeyError, RuntimeError) as exc:
+        raise RuntimeError(f"Unable to generate offline tests: {exc}") from exc
+
+
 def _group_by_file(functions: List[Dict[str, object]]) -> Dict[str, List[Dict[str, object]]]:
     """Group extracted functions by their source file."""
     try:
@@ -79,7 +154,7 @@ def _group_by_file(functions: List[Dict[str, object]]) -> Dict[str, List[Dict[st
         raise RuntimeError(f"Malformed function metadata: {exc}") from exc
 
 
-def generate_tests(project_path: str, output: str | None = None) -> None:
+def generate_tests(project_path: str, output: str | None = None, use_ai: bool = True) -> None:
     """Generate pytest test files for public functions in a project."""
     try:
         root = Path(project_path)
@@ -93,27 +168,37 @@ def generate_tests(project_path: str, output: str | None = None) -> None:
         table.add_column("Status")
 
         for source_file, file_functions in grouped.items():
-            prompt = _build_prompt(file_functions, source_file)
-            response = call_groq(
-                prompt=prompt,
-                system="You are an expert Python test engineer. Return only valid pytest code.",
-                max_tokens=4096,
-            )
-            code = _strip_code_fences(response)
-            status = "ok"
+            status = "offline"
+            if use_ai:
+                prompt = _build_prompt(file_functions, source_file)
+                try:
+                    response = call_groq(
+                        prompt=prompt,
+                        system="You are an expert Python test engineer. Return only valid pytest code.",
+                        max_tokens=4096,
+                    )
+                    code = _strip_code_fences(response)
+                    status = "ai"
 
-            if not _validate_python(code):
-                strict_prompt = prompt + "\nReturn syntactically valid Python only. Do not include markdown fences."
-                response = call_groq(
-                    prompt=strict_prompt,
-                    system="Return only syntactically valid pytest code.",
-                    max_tokens=4096,
-                )
-                code = _strip_code_fences(response)
-                if not _validate_python(code):
-                    status = "syntax invalid"
-                    table.add_row(source_file, str(len(file_functions)), "0", status)
-                    continue
+                    if not _validate_python(code):
+                        strict_prompt = prompt + "\nReturn syntactically valid Python only. Do not include markdown fences."
+                        response = call_groq(
+                            prompt=strict_prompt,
+                            system="Return only syntactically valid pytest code.",
+                            max_tokens=4096,
+                        )
+                        code = _strip_code_fences(response)
+                        if not _validate_python(code):
+                            status = "syntax invalid"
+                            table.add_row(source_file, str(len(file_functions)), "0", status)
+                            continue
+                except RuntimeError as exc:
+                    if "GROQ_API_KEY" not in str(exc):
+                        raise
+                    code = _offline_tests_for_file(root, source_file, file_functions)
+                    status = "offline fallback"
+            else:
+                code = _offline_tests_for_file(root, source_file, file_functions)
 
             original_filename = Path(source_file).stem
             if output:
@@ -124,6 +209,9 @@ def generate_tests(project_path: str, output: str | None = None) -> None:
                     target = output_path / f"test_{original_filename}.py"
             else:
                 target = root / "tests" / f"test_{original_filename}.py"
+            if not _validate_python(code):
+                table.add_row(source_file, str(len(file_functions)), "0", "syntax invalid")
+                continue
             write_file(target, code)
             table.add_row(source_file, str(len(file_functions)), str(code.count("def test_")), status)
 

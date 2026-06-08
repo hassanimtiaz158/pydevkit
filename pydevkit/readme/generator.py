@@ -15,7 +15,10 @@ from pydevkit.utils.file_utils import write_file
 def _basic_template(context: Dict[str, object]) -> str:
     """Render a basic README without external AI calls."""
     try:
-        project_name = str(context["project_name"])
+        project_name = str(context.get("package_name") or context["project_name"])
+        version = str(context.get("version") or "0.1.0")
+        license_name = str(context.get("license") or "MIT")
+        console_scripts = context.get("console_scripts", [])
         dependencies = context.get("dependencies", [])
         functions = context.get("functions", [])
         classes = context.get("classes", [])
@@ -23,6 +26,7 @@ def _basic_template(context: Dict[str, object]) -> str:
         entry_point = context.get("entry_point") or "No obvious entry point detected"
 
         dependency_text = "\n".join(f"- `{item}`" for item in dependencies) if dependencies else "- None detected"
+        command_text = "\n".join(f"- `{item}`" for item in console_scripts) if console_scripts else "- No console scripts detected"
         function_text = "\n".join(
             f"- `{item['name']}` in `{item['file']}`: {item['docstring'] or 'No docstring'}"
             for item in functions
@@ -36,7 +40,8 @@ def _basic_template(context: Dict[str, object]) -> str:
         return f"""# {project_name}
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-{version}-blue)
+![License](https://img.shields.io/badge/license-{license_name}-green)
 
 ## Description
 
@@ -59,6 +64,10 @@ pip install -e .
 ```bash
 python {entry_point}
 ```
+
+## CLI Commands
+
+{command_text}
 
 ## Project Structure
 

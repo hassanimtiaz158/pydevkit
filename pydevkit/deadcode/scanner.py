@@ -1,13 +1,30 @@
 """AST-based dead code scanner."""
 
 import ast
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 
 from pydevkit.utils.file_utils import get_python_files, read_file_safe, write_file
 
 
-Definition = Tuple[Path, int, str, str]
+@dataclass(frozen=True)
+class Definition:
+    """A symbol definition that can be reported as dead code."""
+
+    file: Path
+    line: int
+    symbol_type: str
+    name: str
+
+
+@dataclass(frozen=True)
+class ImportBinding:
+    """A single import alias binding found in a source file."""
+
+    file: Path
+    line: int
+    name: str
 
 
 def _is_skipped_name(name: str) -> bool:
@@ -47,25 +64,31 @@ def _import_names(node: ast.AST) -> List[str]:
 
 
 def _collect_definitions(tree: ast.AST, file_path: Path) -> List[Definition]:
-    """Collect public function, import, and variable definitions."""
+    """Collect top-level public definitions with conservative scope rules."""
     try:
         definitions: List[Definition] = []
-        for node in ast.walk(tree):
+        body = tree.body if isinstance(tree, ast.Module) else []
+        for node in body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not _is_skipped_name(node.name):
-                definitions.append((file_path, node.lineno, "function", node.name))
+                definitions.append(Definition(file_path, node.lineno, "function", node.name))
+            elif isinstance(node, ast.ClassDef) and not _is_skipped_name(node.name):
+                definitions.append(Definition(file_path, node.lineno, "class", node.name))
+                for child in node.body:
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and not _is_skipped_name(child.name):
+                        definitions.append(Definition(file_path, child.lineno, "method", child.name))
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 for name in _import_names(node):
                     if not _is_skipped_name(name):
-                        definitions.append((file_path, node.lineno, "import", name))
+                        definitions.append(Definition(file_path, node.lineno, "import", name))
             elif isinstance(node, ast.Assign):
                 for target in node.targets:
                     for name in _target_names(target):
                         if not _is_skipped_name(name):
-                            definitions.append((file_path, node.lineno, "variable", name))
+                            definitions.append(Definition(file_path, node.lineno, "variable", name))
             elif isinstance(node, ast.AnnAssign):
                 for name in _target_names(node.target):
                     if not _is_skipped_name(name):
-                        definitions.append((file_path, node.lineno, "variable", name))
+                        definitions.append(Definition(file_path, node.lineno, "variable", name))
         return definitions
     except AttributeError:
         return []
@@ -85,13 +108,36 @@ def _collect_usages(tree: ast.AST) -> Set[str]:
         return set()
 
 
-def scan_deadcode(project_path: str) -> List[Dict[str, object]]:
+def _is_test_path(file_path: Path) -> bool:
+    """Return True when a path appears to be a test file."""
+    try:
+        return "tests" in file_path.parts or file_path.name.startswith("test_")
+    except AttributeError:
+        return False
+
+
+def _collect_import_bindings(tree: ast.AST, file_path: Path) -> List[ImportBinding]:
+    """Collect import bindings for import-specific rewrites."""
+    try:
+        bindings: List[ImportBinding] = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                for name in _import_names(node):
+                    bindings.append(ImportBinding(file_path, node.lineno, name))
+        return bindings
+    except AttributeError:
+        return []
+
+
+def scan_deadcode(project_path: str, include_tests: bool = False) -> List[Dict[str, object]]:
     """Scan a project for unused public functions, imports, and variables."""
     try:
         definitions: List[Definition] = []
         used_names: Set[str] = set()
 
         for file_path in get_python_files(project_path):
+            if not include_tests and _is_test_path(file_path):
+                continue
             source = read_file_safe(file_path)
             if not source.strip():
                 continue
@@ -103,16 +149,27 @@ def scan_deadcode(project_path: str) -> List[Dict[str, object]]:
             used_names.update(_collect_usages(tree))
 
         results: List[Dict[str, object]] = []
-        for file_path, line, symbol_type, name in definitions:
-            if name not in used_names:
-                suggestion = f"Remove this unused {symbol_type}" if symbol_type in {"function", "import", "variable"} else "Consider deleting"
+        seen: Set[tuple[str, int, str, str]] = set()
+        for definition in definitions:
+            key = (str(definition.file), definition.line, definition.symbol_type, definition.name)
+            if key in seen:
+                continue
+            seen.add(key)
+            if definition.name not in used_names:
+                suggestion = (
+                    f"Remove this unused {definition.symbol_type}"
+                    if definition.symbol_type in {"function", "import", "variable", "class", "method"}
+                    else "Consider deleting"
+                )
                 results.append(
                     {
-                        "file": str(file_path),
-                        "line": line,
-                        "type": symbol_type,
-                        "name": name,
+                        "file": str(definition.file),
+                        "line": definition.line,
+                        "type": definition.symbol_type,
+                        "name": definition.name,
                         "suggestion": suggestion,
+                        "severity": "high" if definition.symbol_type == "import" else "medium",
+                        "confidence": "medium" if definition.symbol_type in {"function", "method"} else "high",
                     }
                 )
         return results
@@ -120,27 +177,71 @@ def scan_deadcode(project_path: str) -> List[Dict[str, object]]:
         raise RuntimeError(f"Dead code scan failed: {exc}") from exc
 
 
-def remove_unused_imports(project_path: str, results: List[Dict[str, object]]) -> int:
-    """Remove simple unused import lines identified by scan_deadcode."""
+def _format_alias(alias: ast.alias) -> str:
+    """Render an import alias."""
     try:
-        imports_by_file: Dict[Path, Set[int]] = {}
+        return f"{alias.name} as {alias.asname}" if alias.asname else alias.name
+    except AttributeError:
+        return ""
+
+
+def _rewrite_import_line(line: str, node: ast.Import | ast.ImportFrom, unused_names: Set[str]) -> tuple[str | None, int]:
+    """Rewrite a simple one-line import statement by removing unused aliases."""
+    try:
+        if node.end_lineno != node.lineno:
+            return line, 0
+        kept = [alias for alias in node.names if (alias.asname or alias.name.split(".")[0]) not in unused_names]
+        removed = len(node.names) - len(kept)
+        if removed == 0:
+            return line, 0
+        if not kept:
+            return None, removed
+        indentation = line[: len(line) - len(line.lstrip())]
+        if isinstance(node, ast.Import):
+            return f"{indentation}import {', '.join(_format_alias(alias) for alias in kept)}", removed
+        module = "." * node.level + (node.module or "")
+        return f"{indentation}from {module} import {', '.join(_format_alias(alias) for alias in kept)}", removed
+    except AttributeError:
+        return line, 0
+
+
+def remove_unused_imports(project_path: str, results: List[Dict[str, object]], dry_run: bool = False) -> int:
+    """Remove unused import aliases identified by scan_deadcode."""
+    try:
+        imports_by_file: Dict[Path, Set[str]] = {}
         for item in results:
             if item.get("type") == "import":
-                imports_by_file.setdefault(Path(str(item["file"])), set()).add(int(item["line"]))
+                imports_by_file.setdefault(Path(str(item["file"])), set()).add(str(item["name"]))
 
         removed = 0
-        for file_path, lines in imports_by_file.items():
+        for file_path, unused_names in imports_by_file.items():
             source = read_file_safe(file_path)
             if not source:
                 continue
-            kept_lines = []
+            try:
+                tree = ast.parse(source, filename=str(file_path))
+            except SyntaxError:
+                continue
+            import_nodes = {
+                node.lineno: node
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.Import, ast.ImportFrom))
+            }
+            changed = False
+            kept_lines: List[str] = []
             for index, line in enumerate(source.splitlines(), start=1):
-                if index in lines and (line.lstrip().startswith("import ") or line.lstrip().startswith("from ")):
-                    removed += 1
+                node = import_nodes.get(index)
+                if node is None:
+                    kept_lines.append(line)
                     continue
-                kept_lines.append(line)
+                rewritten, removed_count = _rewrite_import_line(line, node, unused_names)
+                removed += removed_count
+                changed = changed or removed_count > 0
+                if rewritten is not None:
+                    kept_lines.append(rewritten)
             trailing_newline = "\n" if source.endswith(("\n", "\r\n")) else ""
-            write_file(file_path, "\n".join(kept_lines) + trailing_newline)
+            if changed and not dry_run:
+                write_file(file_path, "\n".join(kept_lines) + trailing_newline)
         return removed
     except (OSError, ValueError) as exc:
         raise RuntimeError(f"Unable to remove unused imports: {exc}") from exc

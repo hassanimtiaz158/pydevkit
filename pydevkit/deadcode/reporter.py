@@ -21,9 +21,10 @@ def print_deadcode_report(results: List[Dict[str, object]]) -> None:
         table.add_column("Line", justify="right")
         table.add_column("Type")
         table.add_column("Name")
+        table.add_column("Severity")
         table.add_column("Suggestion")
 
-        styles = {"function": "red", "import": "yellow", "variable": "cyan"}
+        styles = {"function": "red", "import": "yellow", "variable": "cyan", "class": "magenta", "method": "blue"}
         files = set()
         for item in results:
             symbol_type = str(item.get("type", ""))
@@ -35,6 +36,7 @@ def print_deadcode_report(results: List[Dict[str, object]]) -> None:
                 str(item.get("line", "")),
                 symbol_type,
                 str(item.get("name", "")),
+                str(item.get("severity", "")),
                 str(item.get("suggestion", "")),
                 style=style,
             )

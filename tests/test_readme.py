@@ -11,6 +11,8 @@ def test_analyze_project_returns_expected_structure() -> None:
 
         assert result["project_name"] == "sample_project"
         assert "example.py" in result["python_files"]
+        assert "package_name" in result
+        assert "version" in result
         assert isinstance(result["functions"], list)
         assert isinstance(result["classes"], list)
         assert isinstance(result["dependencies"], list)

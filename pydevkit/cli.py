@@ -1,5 +1,6 @@
 """Command line interface for PyDevKit."""
 
+import json
 from pathlib import Path
 
 import click
@@ -24,15 +25,25 @@ def cli() -> None:
 @cli.command()
 @click.argument("path")
 @click.option("--fix", is_flag=True, help="Remove unused imports detected by the scanner.")
-def deadcode(path: str, fix: bool) -> None:
+@click.option("--dry-run", is_flag=True, help="Show how many imports would be fixed without editing files.")
+@click.option("--json", "json_output", is_flag=True, help="Print machine-readable JSON results.")
+@click.option("--ci", is_flag=True, help="Exit with a non-zero status if dead code is found.")
+@click.option("--include-tests", is_flag=True, help="Include tests and test_*.py files in the scan.")
+def deadcode(path: str, fix: bool, dry_run: bool, json_output: bool, ci: bool, include_tests: bool) -> None:
     """Find unused functions, variables, and imports."""
     try:
         console.print(Panel(f"Scanning dead code in {Path(path)}", title="PyDevKit Deadcode", style="bold blue"))
-        results = scan_deadcode(path)
-        print_deadcode_report(results)
+        results = scan_deadcode(path, include_tests=include_tests)
+        if json_output:
+            console.print_json(json.dumps(results, indent=2))
+        else:
+            print_deadcode_report(results)
         if fix:
-            removed = remove_unused_imports(path, results)
-            console.print(f"[green]Removed {removed} unused import lines.[/green]")
+            removed = remove_unused_imports(path, results, dry_run=dry_run)
+            action = "Would remove" if dry_run else "Removed"
+            console.print(f"[green]{action} {removed} unused import aliases.[/green]")
+        if ci and results:
+            raise click.exceptions.Exit(1)
     except (OSError, RuntimeError) as exc:
         console.print(f"[bold red]Error:[/bold red] {exc}")
 
@@ -52,11 +63,12 @@ def readme(path: str, no_ai: bool) -> None:
 @cli.command()
 @click.argument("path")
 @click.option("--output", default=None, help="Optional output file or directory for generated tests.")
-def testgen(path: str, output: str | None) -> None:
+@click.option("--offline", is_flag=True, help="Generate conservative tests without calling Groq AI.")
+def testgen(path: str, output: str | None, offline: bool) -> None:
     """Generate pytest tests for public functions."""
     try:
         console.print(Panel(f"Generating tests for {Path(path)}", title="PyDevKit Testgen", style="bold blue"))
-        generate_tests(path, output=output)
+        generate_tests(path, output=output, use_ai=not offline)
     except (OSError, RuntimeError) as exc:
         console.print(f"[bold red]Error:[/bold red] {exc}")
 
