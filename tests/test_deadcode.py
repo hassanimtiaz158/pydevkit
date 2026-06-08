@@ -104,3 +104,24 @@ def test_scan_deadcode_skips_ignored_generated_folders(tmp_path: Path) -> None:
         assert results == []
     except RuntimeError as exc:
         raise AssertionError(f"scan_deadcode failed unexpectedly: {exc}") from exc
+
+
+def test_scan_deadcode_respects_min_confidence(tmp_path: Path) -> None:
+    """Assert confidence filtering can hide lower-confidence symbols."""
+    try:
+        module = tmp_path / "module.py"
+        module.write_text(
+            "import os\n"
+            "\n"
+            "def maybe_public_api() -> int:\n"
+            "    return 1\n",
+            encoding="utf-8",
+        )
+
+        results = scan_deadcode(str(tmp_path), min_confidence="high")
+        names = {str(item["name"]) for item in results}
+
+        assert "os" in names
+        assert "maybe_public_api" not in names
+    except RuntimeError as exc:
+        raise AssertionError(f"scan_deadcode failed unexpectedly: {exc}") from exc

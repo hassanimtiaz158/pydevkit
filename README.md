@@ -8,7 +8,7 @@ PyDevKit is a Python CLI toolkit for auditing, documenting, and test-bootstrappi
 
 ## Demo
 
-![Demo GIF placeholder](docs/demo.gif)
+![PyDevKit demo animation](docs/demo.gif)
 
 ## Features
 
@@ -21,6 +21,9 @@ PyDevKit is a Python CLI toolkit for auditing, documenting, and test-bootstrappi
 - Generate a professional README.md with Groq AI
 - Generate a basic README.md offline with `--no-ai`
 - Generate pytest files with Groq AI or `--offline`
+- Inspect project metrics with `inspect`
+- Run project health checks with `doctor`
+- Tune behavior with `.pydevkit.toml`
 - Print polished terminal output with Rich
 
 ## Installation
@@ -56,6 +59,8 @@ Usage: pydevkit [OPTIONS] COMMAND [ARGS]...
 
 Commands:
   deadcode  Find unused functions, variables, and imports.
+  doctor    Run project health checks.
+  inspect   Inspect project structure, metrics, and risks.
   readme    Generate a README.md file.
   testgen   Generate pytest tests for public functions.
 ```
@@ -105,6 +110,47 @@ Include test files in the scan:
 
 ```bash
 pydevkit deadcode ./sample_project --include-tests
+```
+
+### Project Inspection
+
+```bash
+pydevkit inspect ./sample_project
+```
+
+Expected output:
+
+```text
+PyDevKit Inspect
+Inspecting sample_project
+
+Project Summary
+Metric         Value
+Python Files      1
+Functions         6
+Classes           0
+Deadcode          4
+Syntax Errors     0
+```
+
+Machine-readable output:
+
+```bash
+pydevkit inspect ./sample_project --json
+```
+
+### Doctor Checks
+
+```bash
+pydevkit doctor ./sample_project
+```
+
+Doctor checks for missing README/license/tests/env examples, syntax errors, unresolved imports, possible unused dependencies, complexity issues, and dead code.
+
+CI mode:
+
+```bash
+pydevkit doctor ./sample_project --ci
 ```
 
 ### README Generation
@@ -179,7 +225,29 @@ pydevkit/
 |-- sample_project/
 |-- setup.py
 |-- requirements.txt
+|-- .pydevkit.toml
 `-- README.md
+```
+
+## Configuration
+
+PyDevKit reads `.pydevkit.toml` from the project root:
+
+```toml
+[deadcode]
+ignore_names = ["main"]
+ignore_files = ["migrations/*"]
+include_tests = false
+min_confidence = "low"
+
+[testgen]
+offline = false
+output = ""
+
+[doctor]
+max_function_lines = 80
+max_function_args = 6
+max_branches = 12
 ```
 
 ## Development
@@ -194,6 +262,8 @@ Try the sample project:
 
 ```bash
 pydevkit deadcode ./sample_project
+pydevkit inspect ./sample_project
+pydevkit doctor ./sample_project
 pydevkit readme ./sample_project --no-ai
 pydevkit testgen ./sample_project --offline
 ```

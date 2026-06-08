@@ -2,9 +2,11 @@
 
 import ast
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Any, Dict, List, Set
 
+from pydevkit.utils.config import load_config
 from pydevkit.utils.file_utils import get_python_files, read_file_safe, write_file
 
 
@@ -116,6 +118,45 @@ def _is_test_path(file_path: Path) -> bool:
         return False
 
 
+def _relative_path(file_path: Path, root: Path) -> str:
+    """Return a portable relative path for matching and reporting."""
+    try:
+        return file_path.relative_to(root).as_posix()
+    except ValueError:
+        return file_path.as_posix()
+
+
+def _is_ignored_file(file_path: Path, root: Path, patterns: List[str]) -> bool:
+    """Return True when a file matches configured ignore patterns."""
+    try:
+        relative = _relative_path(file_path, root)
+        return any(fnmatch(relative, pattern.replace("\\", "/")) for pattern in patterns)
+    except TypeError:
+        return False
+
+
+def _confidence_rank(value: str) -> int:
+    """Return a comparable rank for confidence labels."""
+    try:
+        return {"low": 0, "medium": 1, "high": 2}.get(value, 0)
+    except TypeError:
+        return 0
+
+
+def _result_confidence(symbol_type: str) -> str:
+    """Return a confidence label for a result type."""
+    try:
+        if symbol_type == "import":
+            return "high"
+        if symbol_type == "variable":
+            return "high"
+        if symbol_type in {"class", "function", "method"}:
+            return "medium"
+        return "low"
+    except RuntimeError:
+        return "low"
+
+
 def _collect_import_bindings(tree: ast.AST, file_path: Path) -> List[ImportBinding]:
     """Collect import bindings for import-specific rewrites."""
     try:
@@ -129,14 +170,29 @@ def _collect_import_bindings(tree: ast.AST, file_path: Path) -> List[ImportBindi
         return []
 
 
-def scan_deadcode(project_path: str, include_tests: bool = False) -> List[Dict[str, object]]:
+def scan_deadcode(
+    project_path: str,
+    include_tests: bool | None = None,
+    ignore_names: List[str] | None = None,
+    ignore_files: List[str] | None = None,
+    min_confidence: str | None = None,
+) -> List[Dict[str, object]]:
     """Scan a project for unused public functions, imports, and variables."""
     try:
+        root = Path(project_path)
+        config = load_config(project_path)
+        deadcode_config = config.get("deadcode", {})
+        active_include_tests = bool(deadcode_config.get("include_tests", False)) if include_tests is None else include_tests
+        active_ignore_names = set(ignore_names if ignore_names is not None else deadcode_config.get("ignore_names", []))
+        active_ignore_files = list(ignore_files if ignore_files is not None else deadcode_config.get("ignore_files", []))
+        active_min_confidence = min_confidence or str(deadcode_config.get("min_confidence", "low"))
         definitions: List[Definition] = []
         used_names: Set[str] = set()
 
         for file_path in get_python_files(project_path):
-            if not include_tests and _is_test_path(file_path):
+            if not active_include_tests and _is_test_path(file_path):
+                continue
+            if _is_ignored_file(file_path, root, active_ignore_files):
                 continue
             source = read_file_safe(file_path)
             if not source.strip():
@@ -156,6 +212,11 @@ def scan_deadcode(project_path: str, include_tests: bool = False) -> List[Dict[s
                 continue
             seen.add(key)
             if definition.name not in used_names:
+                if definition.name in active_ignore_names:
+                    continue
+                confidence = _result_confidence(definition.symbol_type)
+                if _confidence_rank(confidence) < _confidence_rank(active_min_confidence):
+                    continue
                 suggestion = (
                     f"Remove this unused {definition.symbol_type}"
                     if definition.symbol_type in {"function", "import", "variable", "class", "method"}
@@ -169,11 +230,11 @@ def scan_deadcode(project_path: str, include_tests: bool = False) -> List[Dict[s
                         "name": definition.name,
                         "suggestion": suggestion,
                         "severity": "high" if definition.symbol_type == "import" else "medium",
-                        "confidence": "medium" if definition.symbol_type in {"function", "method"} else "high",
+                        "confidence": confidence,
                     }
                 )
         return results
-    except (OSError, RuntimeError) as exc:
+    except (OSError, RuntimeError, TypeError) as exc:
         raise RuntimeError(f"Dead code scan failed: {exc}") from exc
 
 

@@ -43,6 +43,28 @@ def test_generate_tests_offline_creates_syntax_valid_file(tmp_path: Path) -> Non
         raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
 
 
+def test_generated_offline_tests_include_project_path(tmp_path: Path) -> None:
+    """Assert generated tests can import source modules from custom output dirs."""
+    try:
+        project = tmp_path / "demo"
+        output = tmp_path / "generated"
+        project.mkdir()
+        (project / "worker.py").write_text(
+            "def double(value: int) -> int:\n"
+            "    \"\"\"Double an integer.\"\"\"\n"
+            "    return value * 2\n",
+            encoding="utf-8",
+        )
+
+        generate_tests(str(project), output=str(output), use_ai=False)
+        content = (output / "test_worker.py").read_text(encoding="utf-8")
+
+        assert "sys.path.insert" in content
+        assert repr(str(project.resolve()))[1:-1] in content
+    except RuntimeError as exc:
+        raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
+
+
 def test_extract_functions_captures_args_and_docstrings() -> None:
     """Assert function args, type hints, and docstrings are captured."""
     try:

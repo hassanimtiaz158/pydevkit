@@ -1,0 +1,14 @@
+[deadcode]
+ignore_names = ["main"]
+ignore_files = ["migrations/*"]
+include_tests = false
+min_confidence = "low"
+
+[testgen]
+offline = false
+output = ""
+
+[doctor]
+max_function_lines = 80
+max_function_args = 6
+max_branches = 12
