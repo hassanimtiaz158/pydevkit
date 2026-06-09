@@ -22,6 +22,20 @@ PACKAGE_IMPORT_OVERRIDES = {
 }
 
 
+KNOWN_DEV_DEPENDENCIES = {
+    "black",
+    "coverage",
+    "flake8",
+    "mypy",
+    "pre-commit",
+    "pyright",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "tox",
+}
+
+
 def _issue(code: str, severity: str, message: str, suggestion: str) -> Issue:
     """Create a normalized doctor issue."""
     try:
@@ -44,6 +58,18 @@ def _dependency_import_name(requirement: str) -> str:
             package = package.split(separator, 1)[0].strip()
         normalized = package.lower().replace("_", "-")
         return PACKAGE_IMPORT_OVERRIDES.get(normalized, normalized.replace("-", "_"))
+    except AttributeError:
+        return ""
+
+
+def _dependency_package_name(requirement: str) -> str:
+    """Return a normalized package name from a requirement line."""
+    try:
+        package = requirement.split(";", 1)[0].strip()
+        package = package.split("[", 1)[0].strip()
+        for separator in ("==", ">=", "<=", "~=", "!=", ">", "<"):
+            package = package.split(separator, 1)[0].strip()
+        return package.lower().replace("_", "-")
     except AttributeError:
         return ""
 
@@ -81,6 +107,9 @@ def _unused_dependencies(dependencies: List[str], imports: List[str]) -> List[st
         imported = set(imports)
         unused = []
         for requirement in dependencies:
+            package_name = _dependency_package_name(requirement)
+            if package_name in KNOWN_DEV_DEPENDENCIES:
+                continue
             import_name = _dependency_import_name(requirement)
             if import_name and import_name not in imported:
                 unused.append(requirement)

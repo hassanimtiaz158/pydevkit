@@ -10,7 +10,7 @@ from rich.table import Table
 
 from pydevkit.testgen.extractor import extract_functions
 from pydevkit.utils import console
-from pydevkit.utils.api_client import call_groq
+from pydevkit.utils.api_client import call_groq, is_offline_fallback_error
 from pydevkit.utils.file_utils import write_file
 
 
@@ -128,6 +128,14 @@ def _group_by_file(functions: List[Dict[str, object]]) -> Dict[str, List[Dict[st
         raise RuntimeError(f"Malformed function metadata: {exc}") from exc
 
 
+def _display_path(path: Path) -> str:
+    """Return a readable path for generated output."""
+    try:
+        return path.relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def generate_tests(project_path: str, output: str | None = None, use_ai: bool = True) -> None:
     """Generate pytest test files for public functions in a project."""
     try:
@@ -139,7 +147,9 @@ def generate_tests(project_path: str, output: str | None = None, use_ai: bool = 
         table.add_column("File")
         table.add_column("Functions Found", justify="right")
         table.add_column("Tests Generated")
+        table.add_column("Location")
         table.add_column("Status")
+        generated_locations: List[str] = []
 
         for source_file, file_functions in grouped.items():
             status = "offline"
@@ -164,10 +174,10 @@ def generate_tests(project_path: str, output: str | None = None, use_ai: bool = 
                         code = _strip_code_fences(response)
                         if not _validate_python(code):
                             status = "syntax invalid"
-                            table.add_row(source_file, str(len(file_functions)), "0", status)
+                            table.add_row(source_file, str(len(file_functions)), "0", "-", status)
                             continue
                 except RuntimeError as exc:
-                    if "GROQ_API_KEY" not in str(exc):
+                    if not is_offline_fallback_error(exc):
                         raise
                     code = _offline_tests_for_file(root, source_file, file_functions)
                     status = "offline fallback"
@@ -184,13 +194,19 @@ def generate_tests(project_path: str, output: str | None = None, use_ai: bool = 
             else:
                 target = root / "tests" / f"test_{original_filename}.py"
             if not _validate_python(code):
-                table.add_row(source_file, str(len(file_functions)), "0", "syntax invalid")
+                table.add_row(source_file, str(len(file_functions)), "0", _display_path(target), "syntax invalid")
                 continue
             write_file(target, code)
-            table.add_row(source_file, str(len(file_functions)), str(code.count("def test_")), status)
+            location = _display_path(target)
+            generated_locations.append(location)
+            table.add_row(source_file, str(len(file_functions)), str(code.count("def test_")), location, status)
 
         if not grouped:
-            table.add_row("-", "0", "0", "no functions found")
+            table.add_row("-", "0", "0", "-", "no functions found")
         console.print(table)
+        if generated_locations:
+            console.print("[bold green]Generated file locations:[/bold green]")
+            for location in generated_locations:
+                console.print(f"- {location}")
     except (OSError, RuntimeError) as exc:
         raise RuntimeError(f"Test generation failed: {exc}") from exc

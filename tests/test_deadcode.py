@@ -148,3 +148,51 @@ def test_scan_deadcode_respects_config_ignore_files(tmp_path: Path) -> None:
         assert results == []
     except RuntimeError as exc:
         raise AssertionError(f"scan_deadcode failed unexpectedly: {exc}") from exc
+
+
+def test_scan_deadcode_treats_dunder_all_as_public_usage(tmp_path: Path) -> None:
+    """Assert exported public API symbols are not reported as unused."""
+    try:
+        module = tmp_path / "module.py"
+        module.write_text(
+            "__all__ = ['public_api']\n"
+            "\n"
+            "def public_api() -> int:\n"
+            "    return 1\n"
+            "\n"
+            "def internal_candidate() -> int:\n"
+            "    return 2\n",
+            encoding="utf-8",
+        )
+
+        names = {str(item["name"]) for item in scan_deadcode(str(tmp_path))}
+
+        assert "public_api" not in names
+        assert "internal_candidate" in names
+    except RuntimeError as exc:
+        raise AssertionError(f"scan_deadcode failed unexpectedly: {exc}") from exc
+
+
+def test_scan_deadcode_treats_incremental_dunder_all_as_public_usage(tmp_path: Path) -> None:
+    """Assert simple __all__.append and __all__.extend exports are honored."""
+    try:
+        module = tmp_path / "module.py"
+        module.write_text(
+            "__all__ = []\n"
+            "__all__.append('first_api')\n"
+            "__all__.extend(('second_api',))\n"
+            "\n"
+            "def first_api() -> int:\n"
+            "    return 1\n"
+            "\n"
+            "def second_api() -> int:\n"
+            "    return 2\n",
+            encoding="utf-8",
+        )
+
+        names = {str(item["name"]) for item in scan_deadcode(str(tmp_path))}
+
+        assert "first_api" not in names
+        assert "second_api" not in names
+    except RuntimeError as exc:
+        raise AssertionError(f"scan_deadcode failed unexpectedly: {exc}") from exc

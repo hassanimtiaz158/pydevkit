@@ -24,7 +24,7 @@ def test_extract_functions_finds_public_sample_functions() -> None:
         raise AssertionError(f"extract_functions failed unexpectedly: {exc}") from exc
 
 
-def test_generate_tests_offline_creates_syntax_valid_file(tmp_path: Path) -> None:
+def test_generate_tests_offline_creates_syntax_valid_file(tmp_path: Path, capsys) -> None:
     """Assert offline test generation works without a Groq API key."""
     try:
         project = tmp_path / "demo"
@@ -37,12 +37,15 @@ def test_generate_tests_offline_creates_syntax_valid_file(tmp_path: Path) -> Non
         )
 
         generate_tests(str(project), use_ai=False)
+        output = capsys.readouterr().out
 
         test_file = project / "tests" / "test_calculator.py"
         content = test_file.read_text(encoding="utf-8")
         assert test_file.exists()
         assert "def test_add_is_callable" in content
         assert "add(" not in content
+        assert "Location" in output
+        assert "test_calculator.py" in output
     except RuntimeError as exc:
         raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
 
@@ -86,6 +89,31 @@ def test_generated_offline_tests_alias_test_prefixed_imports(tmp_path: Path) -> 
 
         assert "from commands import testgen as subject_testgen" in content
         assert "assert callable(subject_testgen)" in content
+    except RuntimeError as exc:
+        raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
+
+
+def test_generate_tests_falls_back_offline_for_transient_ai_errors(tmp_path: Path, monkeypatch) -> None:
+    """Assert transient provider failures still produce deterministic tests."""
+    try:
+        project = tmp_path / "demo"
+        project.mkdir()
+        (project / "worker.py").write_text(
+            "def double(value: int) -> int:\n"
+            "    return value * 2\n",
+            encoding="utf-8",
+        )
+
+        def fail_with_timeout(*args, **kwargs):
+            raise RuntimeError("Groq API request failed: timeout while connecting")
+
+        monkeypatch.setattr("pydevkit.testgen.generator.call_groq", fail_with_timeout)
+
+        generate_tests(str(project), use_ai=True)
+        content = (project / "tests" / "test_worker.py").read_text(encoding="utf-8")
+
+        assert "def test_double_is_callable" in content
+        assert "PROJECT_ROOT" in content
     except RuntimeError as exc:
         raise AssertionError(f"generate_tests failed unexpectedly: {exc}") from exc
 

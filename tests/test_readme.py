@@ -23,7 +23,7 @@ def test_analyze_project_returns_expected_structure() -> None:
     assert "entry_point" in result
 
 
-def test_generate_readme_without_ai_creates_file(tmp_path: Path) -> None:
+def test_generate_readme_without_ai_creates_file(tmp_path: Path, capsys) -> None:
     """Assert offline README generation writes markdown to disk."""
     project = tmp_path / "demo"
     project.mkdir()
@@ -33,10 +33,25 @@ def test_generate_readme_without_ai_creates_file(tmp_path: Path) -> None:
     )
 
     generate_readme(str(project), use_ai=False)
+    output = capsys.readouterr().out
 
     readme_path = project / "README.md"
     assert readme_path.exists()
     assert "# demo" in readme_path.read_text(encoding="utf-8")
+    assert "Location:" in output
+    assert "README.md" in output
+
+
+def test_analyze_project_uses_resolved_name_for_dot_path(tmp_path: Path, monkeypatch) -> None:
+    """Assert project_name is not blank when analyzing the current directory."""
+    project = tmp_path / "demo"
+    project.mkdir()
+    (project / "app.py").write_text("def greet() -> str:\n    return 'hello'\n", encoding="utf-8")
+    monkeypatch.chdir(project)
+
+    result = analyze_project(".")
+
+    assert result["project_name"] == "demo"
 
 
 def test_compact_ai_context_limits_large_project_metadata() -> None:

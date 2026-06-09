@@ -110,6 +110,43 @@ def _collect_usages(tree: ast.AST) -> Set[str]:
         return set()
 
 
+def _literal_string_names(node: ast.AST) -> Set[str]:
+    """Extract literal string values from a node used for public exports."""
+    try:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return {node.value}
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            names: Set[str] = set()
+            for item in node.elts:
+                names.update(_literal_string_names(item))
+            return names
+        return set()
+    except AttributeError:
+        return set()
+
+
+def _collect_exported_names(tree: ast.AST) -> Set[str]:
+    """Collect names declared through simple __all__ export patterns."""
+    try:
+        exported: Set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if any(isinstance(target, ast.Name) and target.id == "__all__" for target in targets):
+                    exported.update(_literal_string_names(node.value))
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                receiver = node.func.value
+                if not (isinstance(receiver, ast.Name) and receiver.id == "__all__"):
+                    continue
+                if node.func.attr == "append" and node.args:
+                    exported.update(_literal_string_names(node.args[0]))
+                elif node.func.attr == "extend" and node.args:
+                    exported.update(_literal_string_names(node.args[0]))
+        return exported
+    except AttributeError:
+        return set()
+
+
 def _is_test_path(file_path: Path) -> bool:
     """Return True when a path appears to be a test file."""
     try:
@@ -225,6 +262,7 @@ def scan_deadcode(
                 continue
             definitions.extend(_collect_definitions(tree, file_path))
             used_names.update(_collect_usages(tree))
+            used_names.update(_collect_exported_names(tree))
 
         results: List[Dict[str, object]] = []
         seen: Set[tuple[str, int, str, str]] = set()

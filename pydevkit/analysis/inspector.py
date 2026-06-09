@@ -57,6 +57,7 @@ def _project_modules(project_path: str) -> Set[str]:
             if module:
                 modules.add(module)
                 modules.add(module.split(".", 1)[0])
+                modules.add(file_path.stem)
         return modules
     except OSError:
         return set()

@@ -8,7 +8,7 @@ from rich.panel import Panel
 
 from pydevkit.readme.analyzer import analyze_project
 from pydevkit.utils import console
-from pydevkit.utils.api_client import call_groq
+from pydevkit.utils.api_client import call_groq, is_offline_fallback_error
 from pydevkit.utils.file_utils import write_file
 
 
@@ -137,6 +137,14 @@ def _compact_ai_context(context: Dict[str, object]) -> Dict[str, object]:
     }
 
 
+def _display_path(path: Path) -> str:
+    """Return a readable path for generated output."""
+    try:
+        return path.relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def generate_readme(project_path: str, use_ai: bool = True) -> None:
     """Generate README.md for a project."""
     try:
@@ -157,9 +165,9 @@ def generate_readme(project_path: str, use_ai: bool = True) -> None:
                     max_tokens=1200,
                 )
             except RuntimeError as exc:
-                if "Request too large" not in str(exc) and "tokens per minute" not in str(exc):
+                if not is_offline_fallback_error(exc):
                     raise
-                console.print("[yellow]Groq token limit reached; generating README offline instead.[/yellow]")
+                console.print("[yellow]Groq unavailable; generating README offline instead.[/yellow]")
                 content = _basic_template(context)
         else:
             content = _basic_template(context)
@@ -167,6 +175,7 @@ def generate_readme(project_path: str, use_ai: bool = True) -> None:
         output_path = Path(project_path) / "README.md"
         write_file(output_path, content)
         preview = "\n".join(content.splitlines()[:5])
-        console.print(Panel(preview, title=f"README.md created at {output_path}", style="green"))
+        location = _display_path(output_path)
+        console.print(Panel(f"Location: {location}\n\n{preview}", title="README.md created", style="green"))
     except (OSError, RuntimeError) as exc:
         raise RuntimeError(f"README generation failed: {exc}") from exc

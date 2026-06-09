@@ -111,6 +111,51 @@ def test_doctor_does_not_flag_local_imports_as_missing(tmp_path: Path) -> None:
         raise AssertionError(f"run_doctor failed unexpectedly: {exc}") from exc
 
 
+def test_doctor_treats_subfolder_module_stems_as_local_imports(tmp_path: Path) -> None:
+    """Assert doctor allows tests that import a local module by file stem."""
+    try:
+        sample = tmp_path / "sample_project"
+        tests = sample / "tests"
+        tests.mkdir(parents=True)
+        (sample / "example.py").write_text("VALUE = 1\n", encoding="utf-8")
+        (tests / "test_example.py").write_text("import example\n\nassert example.VALUE == 1\n", encoding="utf-8")
+        (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+        (tmp_path / "LICENSE").write_text("MIT\n", encoding="utf-8")
+        (tmp_path / ".env.example").write_text("KEY=value\n", encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+
+        report = run_doctor(str(tmp_path))
+        missing_imports = [
+            item for item in report["issues"]
+            if item["code"] == "missing-import"
+        ]
+
+        assert missing_imports == []
+    except RuntimeError as exc:
+        raise AssertionError(f"run_doctor failed unexpectedly: {exc}") from exc
+
+
+def test_doctor_does_not_flag_known_dev_dependencies_as_unused(tmp_path: Path) -> None:
+    """Assert common tooling requirements are not treated as unused runtime deps."""
+    try:
+        (tmp_path / "module.py").write_text("def useful() -> int:\n    return 1\n", encoding="utf-8")
+        (tmp_path / "requirements.txt").write_text("pytest>=7.0.0\nruff>=0.5.0\n", encoding="utf-8")
+        (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+        (tmp_path / "LICENSE").write_text("MIT\n", encoding="utf-8")
+        (tmp_path / ".env.example").write_text("KEY=value\n", encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+
+        report = run_doctor(str(tmp_path))
+        unused_dependencies = [
+            item for item in report["issues"]
+            if item["code"] == "possibly-unused-dependency"
+        ]
+
+        assert unused_dependencies == []
+    except RuntimeError as exc:
+        raise AssertionError(f"run_doctor failed unexpectedly: {exc}") from exc
+
+
 def test_run_doctor_reports_health_issues(tmp_path: Path) -> None:
     """Assert doctor reports missing project hygiene files."""
     try:

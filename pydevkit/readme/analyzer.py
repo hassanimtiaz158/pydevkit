@@ -90,6 +90,7 @@ def _pyproject_metadata(pyproject_path: Path) -> Dict[str, object]:
 def _metadata(root: Path) -> Dict[str, object]:
     """Collect package metadata from modern and legacy packaging files."""
     try:
+        project_name = root.name or root.resolve().name
         setup_metadata = _literal_setup_kwargs(root / "setup.py")
         pyproject_metadata = _pyproject_metadata(root / "pyproject.toml")
         merged = {**setup_metadata, **pyproject_metadata}
@@ -100,7 +101,7 @@ def _metadata(root: Path) -> Dict[str, object]:
             if isinstance(scripts, list):
                 console_scripts = [str(item) for item in scripts]
         return {
-            "package_name": str(merged.get("name", root.name)),
+            "package_name": str(merged.get("name", project_name)),
             "version": str(merged.get("version", "")),
             "license": str(merged.get("license", "MIT")),
             "console_scripts": console_scripts,
@@ -113,6 +114,7 @@ def analyze_project(project_path: str) -> Dict[str, object]:
     """Analyze a Python project and return README-friendly metadata."""
     try:
         root = Path(project_path)
+        project_name = root.name or root.resolve().name
         python_files = get_python_files(project_path)
         functions: List[Dict[str, str]] = []
         classes: List[Dict[str, str]] = []
@@ -152,7 +154,7 @@ def analyze_project(project_path: str) -> Dict[str, object]:
 
         package_metadata = _metadata(root)
         return {
-            "project_name": root.name,
+            "project_name": project_name,
             **package_metadata,
             "python_files": [_relative_name(file_path, root) for file_path in python_files],
             "functions": functions,
