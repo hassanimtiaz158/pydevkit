@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PyDevKit Report — pydevkit</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: #f5f7fa; color: #2c3e50; line-height: 1.6;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* Header */
+    .report-header {
+      background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+      color: white; border-radius: 12px; padding: 2rem 2.5rem; margin-bottom: 2rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .report-header h1 { font-size: 1.8rem; font-weight: 700; }
+    .report-header h1 span { opacity: 0.7; font-weight: 400; font-size: 0.95rem; display: block; margin-top: 0.25rem; }
+    .grade-badge {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: #f39c12; color: white; font-size: 2rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+
+    /* Summary cards */
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem; margin-bottom: 2rem;
+    }
+    .card {
+      background: white; border-radius: 10px; padding: 1.25rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07); text-align: center;
+    }
+    .card-value { font-size: 1.8rem; font-weight: 700; }
+    .card-label { font-size: 0.8rem; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.25rem; }
+
+    /* Sections */
+    .section {
+      background: white; border-radius: 12px; padding: 1.75rem 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 1.5rem;
+    }
+    .section h2 {
+      font-size: 1.25rem; margin-bottom: 1.25rem; padding-bottom: 0.75rem;
+      border-bottom: 2px solid #f0f0f0; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section h2 .count {
+      background: #ecf0f1; color: #7f8c8d; font-size: 0.75rem;
+      padding: 0.15rem 0.55rem; border-radius: 20px; font-weight: 600;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block; padding: 0.15rem 0.55rem; border-radius: 4px;
+      color: white; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+    }
+
+    /* Tables */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .data-table th {
+      text-align: left; padding: 0.65rem 0.75rem; background: #f8f9fa;
+      color: #7f8c8d; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .data-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #fafbfc; }
+    .error-row td { color: #e74c3c; }
+
+    /* Issues */
+    .issues-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .issue-card {
+      background: #fafbfc; border-radius: 8px; padding: 1rem 1.25rem;
+    }
+    .issue-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .issue-header code { font-size: 0.82rem; color: #7f8c8d; }
+    .issue-message { font-size: 0.92rem; margin-bottom: 0.35rem; }
+    .issue-suggestion { font-size: 0.85rem; color: #27ae60; }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center; padding: 2rem; color: #27ae60; font-size: 1rem;
+      background: #f0fff4; border-radius: 8px;
+    }
+
+    /* Lists */
+    .dep-list, .file-list { list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .dep-list li code, .file-list li code {
+      background: #f0f4f8; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.82rem;
+    }
+    .structure-section p { margin-bottom: 0.75rem; }
+    .structure-section h4 { margin-bottom: 0.5rem; color: #7f8c8d; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px; }
+
+    /* Footer */
+    .report-footer {
+      text-align: center; color: #bdc3c7; font-size: 0.82rem; margin-top: 2rem; padding-top: 1rem;
+      border-top: 1px solid #ecf0f1;
+    }
+
+    @media (max-width: 640px) {
+      .report-header { flex-direction: column; text-align: center; gap: 1rem; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="report-header">
+    <h1>📊 PyDevKit Report<br><span>pydevkit</span></h1>
+    <div class="grade-badge">B</div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">27</div>
+      <div class="card-label">Python Files</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">68</div>
+      <div class="card-label">Functions</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">2</div>
+      <div class="card-label">Classes</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">3,102</div>
+      <div class="card-label">Lines of Code</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#e74c3c">7</div>
+      <div class="card-label">Dead Code Items</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#27ae60">0</div>
+      <div class="card-label">Syntax Errors</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#f39c12">13</div>
+      <div class="card-label">Health Issues</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#27ae60">Yes</div>
+      <div class="card-label">Tests Folder</div>
+    </div></div>
+
+  <div class="section">
+    <h2>🏥 Health Issues <span class="count">0 high · 13 medium · 0 low</span></h2>
+    <div class="issues-list">
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\analysis\doctor.py:145 has 17 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\deadcode\scanner.py:68 has 21 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\deadcode\scanner.py:128 has 15 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\deadcode\scanner.py:232 has 19 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\deadcode\scanner.py:329 has 15 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\readme\analyzer.py:113 has 16 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>long-function</code>
+        </div>
+        <p class="issue-message">pydevkit\readme\generator.py:15 is 83 lines long.</p>
+        <p class="issue-suggestion">💡 Split the function into smaller units.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\readme\generator.py:15 has 13 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>long-function</code>
+        </div>
+        <p class="issue-message">pydevkit\report\generator.py:219 is 184 lines long.</p>
+        <p class="issue-suggestion">💡 Split the function into smaller units.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>many-args</code>
+        </div>
+        <p class="issue-message">pydevkit\report\generator.py:219 has 9 arguments.</p>
+        <p class="issue-suggestion">💡 Group related arguments or introduce a small data object.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\testgen\generator.py:139 has 16 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>complex-function</code>
+        </div>
+        <p class="issue-message">pydevkit\utils\file_utils.py:58 has 15 branch points.</p>
+        <p class="issue-suggestion">💡 Reduce branching or extract decision logic.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>deadcode</code>
+        </div>
+        <p class="issue-message">7 unused symbols were detected.</p>
+        <p class="issue-suggestion">💡 Run pydevkit deadcode . and review the findings.</p>
+      </div></div>
+  </div>
+
+  <div class="section">
+    <h2>🧹 Dead Code <span class="count">7 found</span></h2>
+    
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>File</th><th>Line</th><th>Type</th><th>Name</th><th>Severity</th><th>Suggestion</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>55</td>
+        <td><span class="badge" style="background:#e74c3c">function</span></td>
+        <td><strong>readme</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused function</td>
+      </tr>
+      <tr>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>83</td>
+        <td><span class="badge" style="background:#e74c3c">function</span></td>
+        <td><strong>inspect</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused function</td>
+      </tr>
+      <tr>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>116</td>
+        <td><span class="badge" style="background:#e74c3c">function</span></td>
+        <td><strong>doctor</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused function</td>
+      </tr>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>4</td>
+        <td><span class="badge" style="background:#f39c12">import</span></td>
+        <td><strong>statistics</strong></td>
+        <td><span class="badge" style="background:#e74c3c">high</span></td>
+        <td>Remove this unused import</td>
+      </tr>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>8</td>
+        <td><span class="badge" style="background:#3498db">variable</span></td>
+        <td><strong>UNUSED_CONSTANT</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused variable</td>
+      </tr>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>35</td>
+        <td><span class="badge" style="background:#e74c3c">function</span></td>
+        <td><strong>unused_discount</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused function</td>
+      </tr>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>43</td>
+        <td><span class="badge" style="background:#e74c3c">function</span></td>
+        <td><strong>unused_slugify</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused function</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ Syntax Errors <span class="count">0</span></h2>
+    <div class="empty-state">✅ No syntax errors found.</div>
+  </div>
+
+  <div class="section">
+    <h2>📦 Public Functions <span class="count">30</span></h2>
+    
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Function</th><th>Arguments</th><th>Returns</th><th>File</th><th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><strong>run_doctor</strong></td>
+        <td><code>project_path: str</code></td>
+        <td><code>Dict[str, object]</code></td>
+        <td><code>pydevkit\analysis\doctor.py</code></td>
+        <td>Run project health checks and return a normalized report.</td>
+      </tr>
+      <tr>
+        <td><strong>inspect_project</strong></td>
+        <td><code>project_path: str</code></td>
+        <td><code>Dict[str, object]</code></td>
+        <td><code>pydevkit\analysis\inspector.py</code></td>
+        <td>Return a consolidated project inspection report.</td>
+      </tr>
+      <tr>
+        <td><strong>cli</strong></td>
+        <td><code>—</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>PyDevKit developer productivity commands.</td>
+      </tr>
+      <tr>
+        <td><strong>deadcode</strong></td>
+        <td><code>path: str, fix: bool, dry_run: bool, json_output: bool, ci: bool, include_tests: bool</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>Find unused functions, variables, and imports.</td>
+      </tr>
+      <tr>
+        <td><strong>readme</strong></td>
+        <td><code>path: str, no_ai: bool</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>Generate a README.md file.</td>
+      </tr>
+      <tr>
+        <td><strong>testgen</strong></td>
+        <td><code>path: str, output: str | None, offline: bool</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>Generate pytest tests for public functions.</td>
+      </tr>
+      <tr>
+        <td><strong>inspect</strong></td>
+        <td><code>path: str, json_output: bool</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>Inspect project structure, metrics, and risks.</td>
+      </tr>
+      <tr>
+        <td><strong>doctor</strong></td>
+        <td><code>path: str, json_output: bool, ci: bool</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>Run project health checks.</td>
+      </tr>
+      <tr>
+        <td><strong>report</strong></td>
+        <td><code>path: str, output: str | None</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\cli.py</code></td>
+        <td>Generate an HTML report for the project.</td>
+      </tr>
+      <tr>
+        <td><strong>print_deadcode_report</strong></td>
+        <td><code>results: List[Dict[str, object]]</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\deadcode\reporter.py</code></td>
+        <td>Print dead code results as a Rich table.</td>
+      </tr>
+      <tr>
+        <td><strong>scan_deadcode</strong></td>
+        <td><code>project_path: str, include_tests: bool | None, ignore_names: List[str] | None, ignore_files: List[str] | None, min_confidence: str | None</code></td>
+        <td><code>List[Dict[str, object]]</code></td>
+        <td><code>pydevkit\deadcode\scanner.py</code></td>
+        <td>Scan a project for unused public functions, imports, and variables.</td>
+      </tr>
+      <tr>
+        <td><strong>remove_unused_imports</strong></td>
+        <td><code>project_path: str, results: List[Dict[str, object]], dry_run: bool</code></td>
+        <td><code>int</code></td>
+        <td><code>pydevkit\deadcode\scanner.py</code></td>
+        <td>Remove unused import aliases identified by scan_deadcode.</td>
+      </tr>
+      <tr>
+        <td><strong>analyze_project</strong></td>
+        <td><code>project_path: str</code></td>
+        <td><code>Dict[str, object]</code></td>
+        <td><code>pydevkit\readme\analyzer.py</code></td>
+        <td>Analyze a Python project and return README-friendly metadata.</td>
+      </tr>
+      <tr>
+        <td><strong>generate_readme</strong></td>
+        <td><code>project_path: str, use_ai: bool</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\readme\generator.py</code></td>
+        <td>Generate README.md for a project.</td>
+      </tr>
+      <tr>
+        <td><strong>generate_html_report</strong></td>
+        <td><code>project_name: str, inspection: Dict[str, Any], doctor_report: Dict[str, Any], deadcode_results: List[Dict[str, Any]], functions: List[Dict[str, Any]], classes: List[Dict[str, Any]], dependencies: List[str], python_files: List[str], entry_point: str | None</code></td>
+        <td><code>str</code></td>
+        <td><code>pydevkit\report\generator.py</code></td>
+        <td>Build the complete HTML report string.</td>
+      </tr>
+      <tr>
+        <td><strong>generate_report</strong></td>
+        <td><code>project_path: str, output: str | None</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\report\generator.py</code></td>
+        <td>Run all analyses and write an HTML report.</td>
+      </tr>
+      <tr>
+        <td><strong>extract_functions</strong></td>
+        <td><code>project_path: str</code></td>
+        <td><code>List[Dict[str, object]]</code></td>
+        <td><code>pydevkit\testgen\extractor.py</code></td>
+        <td>Extract public functions and metadata from a project.</td>
+      </tr>
+      <tr>
+        <td><strong>generate_tests</strong></td>
+        <td><code>project_path: str, output: str | None, use_ai: bool</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\testgen\generator.py</code></td>
+        <td>Generate pytest test files for public functions in a project.</td>
+      </tr>
+      <tr>
+        <td><strong>is_offline_fallback_error</strong></td>
+        <td><code>exc: Exception</code></td>
+        <td><code>bool</code></td>
+        <td><code>pydevkit\utils\api_client.py</code></td>
+        <td>Return True when callers should use deterministic offline generation.</td>
+      </tr>
+      <tr>
+        <td><strong>call_groq</strong></td>
+        <td><code>prompt: str, system: str, model: str, max_tokens: int, retry_attempts: int</code></td>
+        <td><code>str</code></td>
+        <td><code>pydevkit\utils\api_client.py</code></td>
+        <td>Call Groq chat completions and return the response text.</td>
+      </tr>
+      <tr>
+        <td><strong>load_config</strong></td>
+        <td><code>project_path: str</code></td>
+        <td><code>Dict[str, Dict[str, Any]]</code></td>
+        <td><code>pydevkit\utils\config.py</code></td>
+        <td>Load .pydevkit.toml from a project directory with safe defaults.</td>
+      </tr>
+      <tr>
+        <td><strong>get_python_files</strong></td>
+        <td><code>path: str</code></td>
+        <td><code>List[Path]</code></td>
+        <td><code>pydevkit\utils\file_utils.py</code></td>
+        <td>Return Python files below a path, excluding ignored/generated folders.</td>
+      </tr>
+      <tr>
+        <td><strong>read_file_safe</strong></td>
+        <td><code>path: Path</code></td>
+        <td><code>str</code></td>
+        <td><code>pydevkit\utils\file_utils.py</code></td>
+        <td>Read a text file while tolerating encoding issues.</td>
+      </tr>
+      <tr>
+        <td><strong>write_file</strong></td>
+        <td><code>path: Path, content: str</code></td>
+        <td><code>None</code></td>
+        <td><code>pydevkit\utils\file_utils.py</code></td>
+        <td>Write text to a file, creating parent directories when required.</td>
+      </tr>
+      <tr>
+        <td><strong>add_numbers</strong></td>
+        <td><code>left: int, right: int</code></td>
+        <td><code>int</code></td>
+        <td><code>sample_project\example.py</code></td>
+        <td>Add two integers and return the total.</td>
+      </tr>
+      <tr>
+        <td><strong>multiply_numbers</strong></td>
+        <td><code>left: int, right: int</code></td>
+        <td><code>int</code></td>
+        <td><code>sample_project\example.py</code></td>
+        <td>Multiply two integers and return the product.</td>
+      </tr>
+      <tr>
+        <td><strong>normalize_text</strong></td>
+        <td><code>value: str</code></td>
+        <td><code>str</code></td>
+        <td><code>sample_project\example.py</code></td>
+        <td>Normalize whitespace and lowercase a string.</td>
+      </tr>
+      <tr>
+        <td><strong>unused_discount</strong></td>
+        <td><code>price: float, percent: float</code></td>
+        <td><code>float</code></td>
+        <td><code>sample_project\example.py</code></td>
+        <td>Calculate a discounted price.</td>
+      </tr>
+      <tr>
+        <td><strong>unused_slugify</strong></td>
+        <td><code>value: str</code></td>
+        <td><code>str</code></td>
+        <td><code>sample_project\example.py</code></td>
+        <td>Convert a phrase into a simple URL slug.</td>
+      </tr>
+      <tr>
+        <td><strong>distance_from_origin</strong></td>
+        <td><code>x_value: float, y_value: float</code></td>
+        <td><code>float</code></td>
+        <td><code>sample_project\example.py</code></td>
+        <td>Calculate distance from the origin for a point.</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ Public Classes <span class="count">2</span></h2>
+    
+    <table class="data-table">
+      <thead>
+        <tr><th>Class</th><th>File</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><strong>Definition</strong></td>
+        <td><code>pydevkit\deadcode\scanner.py</code></td>
+        <td>A symbol definition that can be reported as dead code.</td>
+      </tr>
+      <tr>
+        <td><strong>ImportBinding</strong></td>
+        <td><code>pydevkit\deadcode\scanner.py</code></td>
+        <td>A single import alias binding found in a source file.</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>📁 Project Structure</h2>
+    
+    <div class="structure-section">
+      <p><strong>Entry Point:</strong> <code>pydevkit\cli.py</code></p>
+      <h4>Python Files (27)</h4>
+      <ul class="file-list"><li><code>pydevkit\__init__.py</code></li><li><code>pydevkit\analysis\__init__.py</code></li><li><code>pydevkit\analysis\doctor.py</code></li><li><code>pydevkit\analysis\inspector.py</code></li><li><code>pydevkit\cli.py</code></li><li><code>pydevkit\deadcode\__init__.py</code></li><li><code>pydevkit\deadcode\reporter.py</code></li><li><code>pydevkit\deadcode\scanner.py</code></li><li><code>pydevkit\readme\__init__.py</code></li><li><code>pydevkit\readme\analyzer.py</code></li><li><code>pydevkit\readme\generator.py</code></li><li><code>pydevkit\report\__init__.py</code></li><li><code>pydevkit\report\generator.py</code></li><li><code>pydevkit\testgen\__init__.py</code></li><li><code>pydevkit\testgen\extractor.py</code></li><li><code>pydevkit\testgen\generator.py</code></li><li><code>pydevkit\utils\__init__.py</code></li><li><code>pydevkit\utils\api_client.py</code></li><li><code>pydevkit\utils\config.py</code></li><li><code>pydevkit\utils\file_utils.py</code></li><li><code>sample_project\example.py</code></li><li><code>sample_project\tests\test_example.py</code></li><li><code>setup.py</code></li><li><code>tests\test_analysis.py</code></li><li><code>tests\test_deadcode.py</code></li><li><code>tests\test_readme.py</code></li><li><code>tests\test_testgen.py</code></li></ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Dependencies <span class="count">5</span></h2>
+    <ul class='dep-list'><li><code>click&gt;=8.1.0</code></li><li><code>groq&gt;=0.9.0</code></li><li><code>rich&gt;=13.0.0</code></li><li><code>pytest&gt;=7.0.0</code></li><li><code>python-dotenv&gt;=1.0.0</code></li></ul>
+  </div>
+
+  <div class="report-footer">
+    Generated by <strong>PyDevKit</strong> — Python Developer Productivity Toolkit
+  </div>
+
+</div>
+</body>
+</html>

@@ -12,6 +12,7 @@ from pydevkit.analysis.inspector import inspect_project
 from pydevkit.deadcode.reporter import print_deadcode_report
 from pydevkit.deadcode.scanner import remove_unused_imports, scan_deadcode
 from pydevkit.readme.generator import generate_readme
+from pydevkit.report.generator import generate_report
 from pydevkit.testgen.generator import generate_tests
 from pydevkit.utils import console
 from pydevkit.utils.config import load_config
@@ -143,6 +144,18 @@ def doctor(path: str, json_output: bool, ci: bool) -> None:
             console.print(table)
         if ci and int(report["summary"]["high"]) + int(report["summary"]["medium"]) > 0:
             raise click.exceptions.Exit(1)
+    except (OSError, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@cli.command()
+@click.argument("path")
+@click.option("--output", default=None, help="Output file path (defaults to <path>/pydevkit-report.html).")
+def report(path: str, output: str | None) -> None:
+    """Generate an HTML report for the project."""
+    try:
+        console.print(Panel(f"Generating HTML report for {Path(path)}", title="PyDevKit Report", style="bold blue"))
+        generate_report(path, output=output)
     except (OSError, RuntimeError) as exc:
         raise click.ClickException(str(exc)) from exc
 

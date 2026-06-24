@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PyDevKit Report — sample_project</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: #f5f7fa; color: #2c3e50; line-height: 1.6;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* Header */
+    .report-header {
+      background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+      color: white; border-radius: 12px; padding: 2rem 2.5rem; margin-bottom: 2rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .report-header h1 { font-size: 1.8rem; font-weight: 700; }
+    .report-header h1 span { opacity: 0.7; font-weight: 400; font-size: 0.95rem; display: block; margin-top: 0.25rem; }
+    .grade-badge {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: #f39c12; color: white; font-size: 2rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+
+    /* Summary cards */
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem; margin-bottom: 2rem;
+    }
+    .card {
+      background: white; border-radius: 10px; padding: 1.25rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07); text-align: center;
+    }
+    .card-value { font-size: 1.8rem; font-weight: 700; }
+    .card-label { font-size: 0.8rem; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.25rem; }
+
+    /* Sections */
+    .section {
+      background: white; border-radius: 12px; padding: 1.75rem 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 1.5rem;
+    }
+    .section h2 {
+      font-size: 1.25rem; margin-bottom: 1.25rem; padding-bottom: 0.75rem;
+      border-bottom: 2px solid #f0f0f0; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section h2 .count {
+      background: #ecf0f1; color: #7f8c8d; font-size: 0.75rem;
+      padding: 0.15rem 0.55rem; border-radius: 20px; font-weight: 600;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block; padding: 0.15rem 0.55rem; border-radius: 4px;
+      color: white; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+    }
+
+    /* Tables */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .data-table th {
+      text-align: left; padding: 0.65rem 0.75rem; background: #f8f9fa;
+      color: #7f8c8d; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .data-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #fafbfc; }
+    .error-row td { color: #e74c3c; }
+
+    /* Issues */
+    .issues-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .issue-card {
+      background: #fafbfc; border-radius: 8px; padding: 1rem 1.25rem;
+    }
+    .issue-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .issue-header code { font-size: 0.82rem; color: #7f8c8d; }
+    .issue-message { font-size: 0.92rem; margin-bottom: 0.35rem; }
+    .issue-suggestion { font-size: 0.85rem; color: #27ae60; }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center; padding: 2rem; color: #27ae60; font-size: 1rem;
+      background: #f0fff4; border-radius: 8px;
+    }
+
+    /* Lists */
+    .dep-list, .file-list { list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .dep-list li code, .file-list li code {
+      background: #f0f4f8; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.82rem;
+    }
+    .structure-section p { margin-bottom: 0.75rem; }
+    .structure-section h4 { margin-bottom: 0.5rem; color: #7f8c8d; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px; }
+
+    /* Footer */
+    .report-footer {
+      text-align: center; color: #bdc3c7; font-size: 0.82rem; margin-top: 2rem; padding-top: 1rem;
+      border-top: 1px solid #ecf0f1;
+    }
+
+    @media (max-width: 640px) {
+      .report-header { flex-direction: column; text-align: center; gap: 1rem; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="report-header">
+    <h1>📊 PyDevKit Report<br><span>sample_project</span></h1>
+    <div class="grade-badge">B</div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">2</div>
+      <div class="card-label">Python Files</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">12</div>
+      <div class="card-label">Functions</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">0</div>
+      <div class="card-label">Classes</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#2c3e50">101</div>
+      <div class="card-label">Lines of Code</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#e74c3c">4</div>
+      <div class="card-label">Dead Code Items</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#27ae60">0</div>
+      <div class="card-label">Syntax Errors</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#f39c12">3</div>
+      <div class="card-label">Health Issues</div>
+    </div>
+    <div class="card">
+      <div class="card-value" style="color:#27ae60">Yes</div>
+      <div class="card-label">Tests Folder</div>
+    </div></div>
+
+  <div class="section">
+    <h2>🏥 Health Issues <span class="count">0 high · 1 medium · 2 low</span></h2>
+    <div class="issues-list">
+      <div class="issue-card" style="border-left:4px solid #3498db">
+        <div class="issue-header">
+          <span class="badge" style="background:#3498db">LOW</span>
+          <code>missing-license</code>
+        </div>
+        <p class="issue-message">License file is missing.</p>
+        <p class="issue-suggestion">💡 Add a LICENSE file that matches your package metadata.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #3498db">
+        <div class="issue-header">
+          <span class="badge" style="background:#3498db">LOW</span>
+          <code>missing-env-example</code>
+        </div>
+        <p class="issue-message">.env.example is missing.</p>
+        <p class="issue-suggestion">💡 Add documented environment variable examples.</p>
+      </div>
+      <div class="issue-card" style="border-left:4px solid #f39c12">
+        <div class="issue-header">
+          <span class="badge" style="background:#f39c12">MEDIUM</span>
+          <code>deadcode</code>
+        </div>
+        <p class="issue-message">4 unused symbols were detected.</p>
+        <p class="issue-suggestion">💡 Run pydevkit deadcode . and review the findings.</p>
+      </div></div>
+  </div>
+
+  <div class="section">
+    <h2>🧹 Dead Code <span class="count">4 found</span></h2>
+    
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>File</th><th>Line</th><th>Type</th><th>Name</th><th>Severity</th><th>Suggestion</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>4</td>
+        <td><span class="badge" style="background:#f39c12">import</span></td>
+        <td><strong>statistics</strong></td>
+        <td><span class="badge" style="background:#e74c3c">high</span></td>
+        <td>Remove this unused import</td>
+      </tr>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>8</td>
+        <td><span class="badge" style="background:#3498db">variable</span></td>
+        <td><strong>UNUSED_CONSTANT</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused variable</td>
+      </tr>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>35</td>
+        <td><span class="badge" style="background:#e74c3c">function</span></td>
+        <td><strong>unused_discount</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused function</td>
+      </tr>
+      <tr>
+        <td><code>sample_project\example.py</code></td>
+        <td>43</td>
+        <td><span class="badge" style="background:#e74c3c">function</span></td>
+        <td><strong>unused_slugify</strong></td>
+        <td><span class="badge" style="background:#f39c12">medium</span></td>
+        <td>Remove this unused function</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ Syntax Errors <span class="count">0</span></h2>
+    <div class="empty-state">✅ No syntax errors found.</div>
+  </div>
+
+  <div class="section">
+    <h2>📦 Public Functions <span class="count">6</span></h2>
+    
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Function</th><th>Arguments</th><th>Returns</th><th>File</th><th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><strong>add_numbers</strong></td>
+        <td><code>left: int, right: int</code></td>
+        <td><code>int</code></td>
+        <td><code>example.py</code></td>
+        <td>Add two integers and return the total.</td>
+      </tr>
+      <tr>
+        <td><strong>multiply_numbers</strong></td>
+        <td><code>left: int, right: int</code></td>
+        <td><code>int</code></td>
+        <td><code>example.py</code></td>
+        <td>Multiply two integers and return the product.</td>
+      </tr>
+      <tr>
+        <td><strong>normalize_text</strong></td>
+        <td><code>value: str</code></td>
+        <td><code>str</code></td>
+        <td><code>example.py</code></td>
+        <td>Normalize whitespace and lowercase a string.</td>
+      </tr>
+      <tr>
+        <td><strong>unused_discount</strong></td>
+        <td><code>price: float, percent: float</code></td>
+        <td><code>float</code></td>
+        <td><code>example.py</code></td>
+        <td>Calculate a discounted price.</td>
+      </tr>
+      <tr>
+        <td><strong>unused_slugify</strong></td>
+        <td><code>value: str</code></td>
+        <td><code>str</code></td>
+        <td><code>example.py</code></td>
+        <td>Convert a phrase into a simple URL slug.</td>
+      </tr>
+      <tr>
+        <td><strong>distance_from_origin</strong></td>
+        <td><code>x_value: float, y_value: float</code></td>
+        <td><code>float</code></td>
+        <td><code>example.py</code></td>
+        <td>Calculate distance from the origin for a point.</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ Public Classes <span class="count">0</span></h2>
+    <div class="empty-state">No public classes found.</div>
+  </div>
+
+  <div class="section">
+    <h2>📁 Project Structure</h2>
+    
+    <div class="structure-section">
+      <p><strong>Entry Point:</strong> <code>Not detected</code></p>
+      <h4>Python Files (2)</h4>
+      <ul class="file-list"><li><code>example.py</code></li><li><code>tests\test_example.py</code></li></ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Dependencies <span class="count">0</span></h2>
+    <div class="empty-state">No dependencies detected (no requirements.txt found).</div>
+  </div>
+
+  <div class="report-footer">
+    Generated by <strong>PyDevKit</strong> — Python Developer Productivity Toolkit
+  </div>
+
+</div>
+</body>
+</html>
